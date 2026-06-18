@@ -1,0 +1,2523 @@
+<!DOCTYPE html>
+<html lang="fr" id="root">
+<head>
+  <meta charset="utf-8" />
+  <title>Wavemap</title>
+  <link rel="icon" type="image/svg+xml" href="favicon.svg" />
+  <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png" />
+  <link rel="apple-touch-icon" href="apple-touch-icon.png" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link href="https://unpkg.com/maplibre-gl@5.1.0/dist/maplibre-gl.css" rel="stylesheet" />
+  <script src="https://unpkg.com/maplibre-gl@5.1.0/dist/maplibre-gl.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@jaames/iro@5/dist/iro.min.js"></script>
+  <link rel="stylesheet" href="fonts/genty.css" />
+  <style>
+    :root {
+      --accent: #8b5cf6;
+      /* Mode clair (par défaut) */
+      --bg: #ffffff;
+      --card-bg: rgba(255,255,255,0.94);
+      --card-border: rgba(0,0,0,0.07);
+      --text: #1b1b26;
+      --text-sub: #6a6a7a;
+      --btn-bg: rgba(0,0,0,0.05);
+      --btn-hover: rgba(0,0,0,0.11);
+      --status: #2a8fc0;
+      --shadow: 0 12px 40px rgba(0,0,0,.16);
+    }
+    body.dark {
+      /* Mode sombre */
+      --bg: #1f1f28;
+      --card-bg: rgba(42,42,54,0.92);
+      --card-border: rgba(255,255,255,0.09);
+      --text: #ffffff;
+      --text-sub: #b8b8c8;
+      --btn-bg: rgba(255,255,255,0.10);
+      --btn-hover: rgba(255,255,255,0.20);
+      --status: #a0e0ff;
+      --shadow: 0 12px 40px rgba(0,0,0,.45);
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; height: 100%; overflow: hidden; background: var(--bg); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; transition: background .4s; }
+
+    /* Bouton mode clair / sombre */
+    .theme-toggle {
+      position: absolute; top: 18px; left: 18px; z-index: 20;
+      width: 42px; height: 42px; border-radius: 50%; cursor: pointer;
+      border: 1px solid var(--card-border); background: var(--card-bg); color: var(--text);
+      font-size: 18px; line-height: 1; display: flex; align-items: center; justify-content: center;
+      box-shadow: var(--shadow); backdrop-filter: blur(8px); transition: background .25s, transform .1s;
+    }
+    .theme-toggle:hover { transform: scale(1.06); }
+    .theme-toggle:active { transform: scale(.94); }
+
+    /* Bouton + panneau Favoris (haut droite) */
+    /* Barre d'outils en haut à droite : dé + recherche + favoris */
+    .topbar-right {
+      position: absolute; top: 18px; right: 18px; z-index: 20;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .fav-toggle {
+      position: relative; flex: 0 0 auto;
+      width: 42px; height: 42px; border-radius: 50%; cursor: pointer;
+      border: 1px solid var(--card-border); background: var(--card-bg); color: var(--text);
+      display: flex; align-items: center; justify-content: center;
+      box-shadow: var(--shadow); backdrop-filter: blur(8px); transition: background .25s, transform .1s;
+    }
+    .fav-toggle:hover { transform: scale(1.06); }
+    .fav-toggle:active { transform: scale(.94); }
+    .fav-toggle svg { width: 23px; height: 23px; fill: currentColor; }
+    .fav-badge {
+      position: absolute; top: -3px; right: -3px; min-width: 16px; height: 16px;
+      border-radius: 999px; background: var(--accent); color: #fff; font-size: 10px;
+      font-weight: 700; display: flex; align-items: center; justify-content: center;
+      padding: 0 4px; box-shadow: 0 0 0 2px var(--bg);
+    }
+    .fav-badge:empty { display: none; }
+
+    /* Bouton pays au hasard (dé) */
+    .dice-toggle {
+      flex: 0 0 auto;
+      width: 42px; height: 42px; border-radius: 50%; cursor: pointer;
+      border: 1px solid var(--card-border); background: var(--card-bg); color: var(--text);
+      display: flex; align-items: center; justify-content: center;
+      box-shadow: var(--shadow); backdrop-filter: blur(8px); transition: background .25s, transform .1s;
+    }
+    .dice-toggle:hover { transform: scale(1.06); }
+    .dice-toggle:active { transform: scale(.94); }
+    .dice-toggle svg { width: 22px; height: 22px; }
+    .dice-toggle.rolling svg { animation: diceRoll .5s ease; }
+    @keyframes diceRoll { from { transform: rotate(0); } to { transform: rotate(360deg); } }
+
+    /* Champ de recherche (genre ou nom de radio) + résultats */
+    .search-box { position: relative; flex: 0 0 auto; }
+    .search-input {
+      height: 42px; width: 190px; max-width: 42vw;
+      border-radius: 999px; border: 1px solid var(--card-border);
+      background: var(--card-bg); color: var(--text);
+      padding: 0 16px; font-size: 14px; outline: none;
+      box-shadow: var(--shadow); backdrop-filter: blur(8px);
+      transition: width .2s, box-shadow .2s;
+    }
+    .search-input:focus { width: 230px; }
+    .search-input::placeholder { color: var(--text-sub); }
+    .search-panel {
+      position: absolute; top: 50px; left: 0; width: 300px; max-width: 86vw;
+      max-height: 62vh; overflow-y: auto;
+      background: var(--card-bg); color: var(--text);
+      border: 1px solid var(--card-border); border-radius: 16px;
+      box-shadow: var(--shadow); backdrop-filter: blur(14px); padding: 8px;
+      opacity: 0; transform: translateY(-8px) scale(.98); pointer-events: none;
+      transition: opacity .2s, transform .2s;
+    }
+    .search-panel.show { opacity: 1; transform: none; pointer-events: auto; }
+    .search-row {
+      display: flex; align-items: center; gap: 10px; width: 100%;
+      border: none; background: none; color: inherit; cursor: pointer;
+      padding: 7px 8px; border-radius: 10px; text-align: left;
+    }
+    .search-row:hover { background: var(--btn-bg); }
+    .search-ico {
+      width: 30px; height: 30px; border-radius: 8px; flex: 0 0 auto;
+      display: flex; align-items: center; justify-content: center; font-size: 15px;
+      background: linear-gradient(135deg, #8b5cf6, #5aa9d6); overflow: hidden;
+    }
+    .search-ico img { width: 100%; height: 100%; object-fit: cover; }
+    .search-meta { min-width: 0; display: flex; flex-direction: column; }
+    .search-name { font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .search-sub { font-size: 11.5px; color: var(--text-sub); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .search-empty, .search-loading { padding: 14px 8px; color: var(--text-sub); font-size: 13.5px; text-align: center; }
+
+    .fav-panel {
+      position: absolute; top: 68px; right: 18px; z-index: 19;
+      width: min(300px, calc(100vw - 36px)); max-height: 60vh; overflow-y: auto;
+      background: var(--card-bg); color: var(--text);
+      border: 1px solid var(--card-border); border-radius: 16px;
+      box-shadow: var(--shadow); backdrop-filter: blur(14px); padding: 10px;
+      opacity: 0; transform: translateY(-8px) scale(.98); pointer-events: none;
+      transition: opacity .2s, transform .2s;
+    }
+    .fav-panel.show { opacity: 1; transform: none; pointer-events: auto; }
+    .fav-head { font-size: 12px; text-transform: uppercase; letter-spacing: 1px; color: var(--text-sub); padding: 4px 8px 8px; }
+    .fav-empty { padding: 14px 8px; color: var(--text-sub); font-size: 14px; text-align: center; }
+    .fav-row { display: flex; align-items: center; gap: 4px; }
+    .fav-play {
+      flex: 1; display: flex; align-items: center; gap: 10px; min-width: 0;
+      border: none; background: none; color: inherit; cursor: pointer;
+      padding: 7px 8px; border-radius: 10px; text-align: left; font-size: 14px;
+    }
+    .fav-play:hover { background: var(--btn-bg); }
+    .fav-ico { width: 26px; height: 26px; border-radius: 7px; flex: 0 0 auto; display: flex; align-items: center; justify-content: center; font-size: 14px; background: linear-gradient(135deg, #8b5cf6, #5aa9d6); overflow: hidden; }
+    .fav-ico img { width: 100%; height: 100%; object-fit: cover; }
+    .fav-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .fav-del { border: none; background: none; color: var(--text-sub); cursor: pointer; font-size: 13px; padding: 6px; border-radius: 8px; flex: 0 0 auto; }
+    .fav-del:hover { color: var(--text); background: var(--btn-bg); }
+
+    /* Étoile favori dans le lecteur */
+    #plStar svg { width: 19px; height: 19px; }
+    #plStar.on svg path { fill: #ffc83d; stroke: #ffc83d; }
+
+    /* Logo Wavemap (police Genty Demo, installée localement) */
+    .logo {
+      position: absolute; top: 18px; left: 66px; z-index: 20;
+      height: 42px; display: flex; align-items: center;
+      padding: 0 16px;                /* espace pour les swashes du script (W, p) */
+      font-family: 'Genty Demo', cursive;
+      font-size: 37px; line-height: 1; color: var(--text);
+      overflow: visible; white-space: nowrap;
+      transform: translateY(7px); /* aligne le centre visuel du script sur le bouton */
+      pointer-events: none; user-select: none;
+    }
+    /* Phrase d'accroche centrée en haut */
+    .tagline {
+      position: fixed; top: 18px; left: 50%; transform: translateX(-50%);
+      height: 56px; display: flex; align-items: center; justify-content: center;
+      z-index: 15; pointer-events: none; user-select: none;
+      font-size: 15px; font-weight: 600; color: var(--text);
+      white-space: nowrap; letter-spacing: .2px;
+    }
+    /* masquée sur écrans étroits pour ne pas chevaucher logo / recherche */
+    @media (max-width: 1180px) { .tagline { display: none; } }
+    /* Grille de points en fond (derrière le globe) */
+    #dots { position: fixed; inset: 0; z-index: 0; pointer-events: none; }
+    /* Globe plein écran (le positionnement bas se fait via le padding de la carte) */
+    #map { position: fixed; inset: 0; z-index: 1; }
+    .maplibregl-ctrl-attrib, .maplibregl-ctrl-logo { display: none !important; }
+    #map canvas { cursor: grab; }
+    #map canvas:active { cursor: grabbing; }
+
+    /* Dirigeable publicitaire + banderole */
+    #blimp, .blimp-unit {
+      position: fixed; left: 0; top: 0; z-index: 6;
+      display: flex; align-items: center; gap: 4px;
+      pointer-events: none; will-change: transform;
+      /* rapproche la banderole de l'arrière du dirigeable (compense la marge transparente du PNG) */
+      --banner-pull: 30px;
+    }
+    .blimp-svg { width: 165px; height: auto; flex: 0 0 auto; }
+    .blimp-img { width: 165px; height: auto; flex: 0 0 auto; display: none; }
+    /* calque dédié au tangage du dirigeable (indépendant du retournement gauche/droite) */
+    .blimp-craft { flex: 0 0 auto; display: flex; align-items: center; transform-origin: center; animation: blimpPitch 7s ease-in-out infinite; }
+    @keyframes blimpPitch { 0%, 100% { transform: rotate(-1.2deg); } 50% { transform: rotate(1.2deg); } }
+    /* quand une vraie image de dirigeable est chargée, on cache le SVG de secours */
+    #blimp.has-img .blimp-svg, .blimp-unit.has-img .blimp-svg { display: none; }
+    #blimp.has-img .blimp-img, .blimp-unit.has-img .blimp-img { display: block; }
+    /* Défaut : vol vers la GAUCHE. Tes PNG regardent à droite -> on les retourne (nez à gauche). */
+    .blimp-img { transform: scaleX(-1); }
+    /* Vol vers la DROITE : on inverse l'ordre (banderole derrière, à gauche) et les orientations. */
+    #blimp.dir-right, .blimp-unit.dir-right { flex-direction: row-reverse; }
+    #blimp.dir-right .blimp-img, .blimp-unit.dir-right .blimp-img { transform: none; }
+    #blimp.dir-right .blimp-svg, .blimp-unit.dir-right .blimp-svg { transform: scaleX(-1); }
+    #blimp.dir-right .blimp-banner-wrap, .blimp-unit.dir-right .blimp-banner-wrap { transform: scaleX(-1); margin-left: 0; margin-right: calc(-1 * var(--banner-pull)); }
+    #blimp.dir-right .blimp-banner image, .blimp-unit.dir-right .blimp-banner image,
+    #blimp.dir-right .blimp-banner text, .blimp-unit.dir-right .blimp-banner text { transform-box: fill-box; transform-origin: center; transform: scaleX(-1); }
+    .blimp-banner-wrap { flex: 0 0 auto; display: flex; align-items: center; margin-left: calc(-1 * var(--banner-pull)); }
+    /* wrapper qui ondule : porte l'animation pour que le drapeau SVG ET l'overlay vidéo bougent ensemble */
+    .blimp-banner-wave {
+      position: relative; display: inline-flex;
+      transform-origin: left center;
+      animation: bannerWave 3.4s ease-in-out infinite;
+    }
+    .blimp-banner { width: 185px; height: auto; display: block; }
+    /* Overlay vidéo : posé sur la zone média du drapeau, clippé à sa forme, ondule avec le wrapper */
+    .blimp-video-overlay {
+      position: absolute; left: 27.44%; top: 10.78%; width: 71.34%; height: 86.79%;
+      overflow: hidden; pointer-events: none; display: none;
+      clip-path: url(#adFlagClip); -webkit-clip-path: url(#adFlagClip);
+    }
+    .blimp-video-overlay video { width: 100%; height: 100%; object-fit: cover; display: block; }
+    #blimp.dir-right .blimp-video-overlay video, .blimp-unit.dir-right .blimp-video-overlay video { transform: scaleX(-1); }
+    /* flottement au vent : ondulation douce et constante, qui part du harnais */
+    @keyframes bannerWave {
+      0%, 100% { transform: skewY(-2.4deg) rotate(-0.6deg); }
+      50%      { transform: skewY(2.4deg) rotate(0.6deg); }
+    }
+
+    /* ===== Pub dirigeable : bouton flottant rond + modale des offres ===== */
+    .ad-fab {
+      position: fixed; bottom: 22px; left: 22px; z-index: 25; cursor: pointer;
+      width: 42px; height: 42px; padding: 0;
+      display: flex; align-items: center; justify-content: center;
+      border-radius: 50%; border: 1px solid var(--card-border);
+      background: var(--card-bg); color: var(--text);
+      box-shadow: var(--shadow); backdrop-filter: blur(8px);
+      transition: transform .15s, background .2s;
+    }
+    .ad-fab svg { width: 26px; height: 26px; fill: currentColor; }
+    .ad-fab:hover { transform: translateY(-2px) scale(1.06); }
+    .ad-fab:active { transform: scale(.94); }
+
+    /* Bottom sheet : glisse depuis le bas, occupe la moitié inférieure */
+    .ad-modal {
+      position: fixed; inset: 0; z-index: 60; display: flex; align-items: flex-end; justify-content: center;
+      background: rgba(8,8,14,0); pointer-events: none; transition: background .3s ease;
+    }
+    .ad-modal.open { background: rgba(8,8,14,.5); pointer-events: auto; }
+    .ad-sheet {
+      width: 100%; height: 64vh; overflow: hidden; position: relative;
+      background: var(--card-bg); color: var(--text);
+      border-top: 1px solid var(--card-border);
+      border-top-left-radius: 26px; border-top-right-radius: 26px;
+      box-shadow: 0 -16px 50px rgba(0,0,0,.4);
+      padding: 18px 40px 38px; backdrop-filter: blur(16px);
+      /* +80px : cache l'ombre portée (0 -16px 50px) qui sinon déborde en bas d'écran quand fermé */
+      transform: translateY(calc(100% + 80px));
+      transition: transform .4s cubic-bezier(.2,.8,.25,1);
+    }
+    .ad-modal.open .ad-sheet { transform: translateY(0); }
+    .ad-grabber { width: 40px; height: 4px; border-radius: 999px; background: var(--card-border); margin: 0 auto 14px; }
+    .ad-sheet-inner { max-width: 1400px; margin: 0 auto; }
+    .ad-close { position: absolute; top: 14px; right: 16px; border: none; background: none; cursor: pointer; color: var(--text-sub); font-size: 20px; line-height: 1; padding: 4px; transition: color .2s, transform .25s cubic-bezier(.34,1.56,.64,1); }
+    .ad-close:hover { color: var(--text); transform: rotate(90deg) scale(1.1); }
+    .ad-close:active { transform: rotate(90deg) scale(.9); }
+    .ad-title { margin: 6px 0 32px; font-family: 'Genty Demo', cursive; font-size: 42px; line-height: 1.05; text-align: center; }
+    .ad-offers { display: flex; gap: 24px; margin-bottom: 30px; }
+    .ad-offer {
+      flex: 1; text-align: left; cursor: pointer; padding: 26px; border-radius: 20px;
+      border: 2px solid var(--card-border); background: var(--btn-bg); color: inherit;
+      transition: border-color .15s, transform .25s cubic-bezier(.34,1.56,.64,1), background .15s, box-shadow .2s;
+    }
+    .ad-offer:hover { transform: translateY(-4px) scale(1.015); box-shadow: 0 16px 32px rgba(0,0,0,.16); }
+    .ad-offer:active { transform: translateY(-1px) scale(.99); }
+    .ad-offer.selected { border-color: var(--accent); background: rgba(139,92,246,.14); }
+    .ad-offer-name { font-size: 20px; font-weight: 750; }
+    .ad-offer-price { font-size: 34px; font-weight: 800; margin: 12px 0 8px; }
+    .ad-offer-desc { font-size: 15px; color: var(--text-sub); }
+    .ad-upload {
+      display: block; cursor: pointer; border: 2px dashed var(--card-border); border-radius: 20px;
+      padding: 28px; text-align: center; overflow: hidden; transition: border-color .15s;
+    }
+    .ad-upload:hover { border-color: var(--accent); }
+    .ad-upload-inner { display: flex; flex-direction: column; align-items: center; gap: 6px; color: var(--text-sub); font-size: 13.5px; }
+    .ad-upload-icon { font-size: 24px; }
+    .ad-preview { width: 100%; height: 110px; object-fit: cover; border-radius: 10px; display: block; }
+    .ad-note { font-size: 12px; color: var(--text-sub); margin: 22px 0 22px; line-height: 1.5; text-align: center; }
+    .ad-status { font-size: 13px; text-align: center; margin: 12px 0 0; line-height: 1.45; }
+    .ad-status.is-error { color: #e5484d; }
+    .ad-status.is-info { color: var(--text-sub); }
+    .ad-status.is-ok { color: #30a46c; }
+    .ad-launch {
+      display: block; width: 100%;
+      max-width: 1046px; /* aligné sur ad-layout : 340 (cards) + 36 (gap) + 670 (canvas) */
+      margin: 0 auto;
+      border: none; border-radius: 16px; padding: 17px; cursor: pointer;
+      background: var(--accent); color: #fff; font-size: 16px; font-weight: 700;
+      box-shadow: none;
+      transition: background .2s, transform .1s, opacity .2s;
+    }
+    .ad-launch:hover:not(:disabled) { background: #9d70f7; }
+    .ad-launch:active:not(:disabled) { transform: scale(.98); }
+    .ad-launch:disabled { opacity: .45; cursor: not-allowed; }
+    @keyframes adFloat {
+      0%, 100% { transform: translateY(0); }
+      50%       { transform: translateY(-5px); }
+    }
+    @keyframes adBtnPulse {
+      0%, 100% { box-shadow: 0 4px 18px rgba(139,92,246,0.18); }
+      50%       { box-shadow: 0 4px 36px rgba(139,92,246,0.55); }
+    }
+    .ad-launch.ad-ready { animation: adBtnPulse 3.5s ease-in-out infinite; }
+    .ad-launch:not(.ad-ready) { animation: none !important; box-shadow: none !important; }
+    .ad-launch-label { display: inline-block; }
+    .ad-launch.ad-ready .ad-launch-letter {
+      display: inline-block;
+      animation: adFloat 2.2s ease-in-out infinite;
+    }
+    .ad-pay { text-align: center; font-size: 11.5px; color: var(--text-sub); margin: 10px 0 0; }
+
+    /* ===== Nouveau layout pub : offres empilées à gauche, canvas à droite ===== */
+    .ad-sheet { height: 78vh; }
+    .ad-layout {
+      display: grid; grid-template-columns: minmax(260px, 340px) minmax(570px, 670px); gap: 36px;
+      align-items: start; margin-bottom: 22px;
+      justify-content: center;
+    }
+    .ad-layout .ad-offers { display: flex; flex-direction: column; gap: 22px; margin-bottom: 0; }
+    .ad-layout .ad-offer { padding: 30px 30px; border-radius: 22px; }
+    .ad-layout .ad-offer-name { font-size: 24px; font-weight: 750; }
+    .ad-layout .ad-offer-price { font-size: 40px; margin: 13px 0 9px; }
+    .ad-layout .ad-offer-desc { font-size: 16px; }
+    .ad-canvas-col {
+      display: flex; flex-direction: column; gap: 14px; min-width: 0;
+      background: var(--btn-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 22px;
+      padding: 22px;
+    }
+    .ad-canvas-col .ad-tools { flex-wrap: nowrap; }
+    body.dark .ad-canvas-col { background: rgba(255,255,255,0.04); }
+
+    /* Éditeur : la banderole entière en contour SVG ; le canvas blanc occupe la zone "drapeau" */
+    .ad-banner-editor {
+      position: relative; width: 100%; aspect-ratio: 820 / 371;
+    }
+    .ad-banner-outline {
+      position: absolute; inset: 0; width: 100%; height: 100%;
+      pointer-events: none; color: var(--text-sub); opacity: 0.75;
+      z-index: 2; /* au-dessus du canvas pour qu'on voie tout le contour autour */
+    }
+    .ad-banner-outline path {
+      stroke-dasharray: 70 45; /* en path-coords (échelle x10) → ~7px/4.5px à l'écran */
+    }
+    .ad-canvas-stack {
+      position: absolute;
+      left: 27.44%;  /* 225/820 — commence pile au début du drapeau (après le pole) */
+      top: 10.78%;   /*  40/371 */
+      width: 71.34%; /* 585/820 */
+      height: 86.79%;/* 322/371 */
+      background: #ffffff;
+      /* Suit la silhouette exacte du drapeau ; clippe aussi les pointer events */
+      clip-path: url(#adFlagClip);
+      -webkit-clip-path: url(#adFlagClip);
+    }
+    .ad-canvas-stack canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+    .ad-video-preview { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: none; background: #000; }
+    .ad-canvas-stack.mode-video canvas,
+    .ad-canvas-stack.mode-video .ad-canvas-events { display: none; }
+    .ad-canvas-stack.mode-video .ad-video-preview { display: block; }
+    .ad-canvas-events {
+      position: absolute; inset: 0; cursor: crosshair; touch-action: none;
+    }
+    .ad-canvas-stack.tool-eraser .ad-canvas-events { cursor: cell; }
+    .ad-canvas-stack.tool-image .ad-canvas-events { cursor: grab; }
+    .ad-canvas-stack.tool-image .ad-canvas-events:active { cursor: grabbing; }
+
+    /* Barre d'outils du canvas */
+    .ad-tools {
+      display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+    }
+    .ad-tool {
+      border: 1px solid var(--card-border); background: var(--card-bg);
+      color: var(--text); padding: 8px 10px; border-radius: 10px; cursor: pointer;
+      font-size: 18px; line-height: 1; min-width: 38px;
+      display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+      transition: background .18s, border-color .15s, color .15s, transform .22s cubic-bezier(.34,1.56,.64,1);
+    }
+    .ad-tool:hover:not(:disabled) { background: var(--btn-hover); transform: scale(1.12); }
+    .ad-tool:active:not(:disabled) { transform: scale(.9); }
+    .ad-tool.active { border-color: var(--accent); color: var(--accent); background: rgba(139,92,246,.12); }
+    .ad-tool:disabled { opacity: .45; cursor: not-allowed; }
+    .ad-tool-file { cursor: pointer; }
+    /* Dropdown média */
+    .ad-media-wrap { position: relative; flex-shrink: 0; }
+    .ad-media-dropdown {
+      display: none; position: absolute;
+      bottom: calc(100% + 8px); left: 50%; transform: translateX(-50%);
+      background: var(--card-bg); border: 1px solid var(--card-border);
+      border-radius: 12px; padding: 6px;
+      box-shadow: 0 8px 24px rgba(0,0,0,.2);
+      z-index: 100; white-space: nowrap;
+      flex-direction: column; gap: 2px; min-width: 185px;
+    }
+    .ad-media-dropdown.open { display: flex; }
+    .ad-media-option {
+      display: flex; align-items: center; gap: 9px;
+      border: none; background: none; color: var(--text);
+      padding: 8px 10px; border-radius: 8px; cursor: pointer;
+      font-size: 13.5px; text-align: left; width: 100%;
+      transition: background .12s;
+    }
+    .ad-media-option:hover:not(:disabled) { background: var(--btn-bg); }
+    .ad-media-option:disabled { opacity: .4; cursor: not-allowed; }
+    .ad-media-option svg { width: 15px; height: 15px; flex-shrink: 0; }
+    .ad-tool svg { width: 18px; height: 18px; display: block; flex-shrink: 0; }
+    /* Roue de couleur custom */
+    .ad-color-wrap { position: relative; flex-shrink: 0; }
+    .ad-color-btn {
+      min-width: 38px; padding: 8px 10px; border-radius: 10px;
+      border: 1px solid var(--card-border); cursor: pointer;
+      background: #8b5cf6;
+      display: inline-flex; align-items: center; justify-content: center;
+      transition: transform .22s cubic-bezier(.34,1.56,.64,1), border-color .15s;
+      flex-shrink: 0;
+    }
+    .ad-color-btn:hover:not(:disabled) { border-color: var(--accent); transform: scale(1.12); }
+    .ad-color-btn:active:not(:disabled) { transform: scale(.9); }
+    .ad-color-btn:disabled { opacity: .45; cursor: not-allowed; }
+    .ad-color-icon { width: 18px; height: 18px; color: #fff; flex-shrink: 0; }
+    .ad-color-popover {
+      display: none; position: absolute;
+      bottom: calc(100% + 10px); left: 50%; transform: translateX(-50%);
+      background: var(--card-bg); border: 1px solid var(--card-border);
+      border-radius: 16px; padding: 14px;
+      box-shadow: 0 8px 32px rgba(0,0,0,.22);
+      z-index: 200;
+    }
+    .ad-color-popover.open { display: block; }
+    /* Fix iro.js slider visual artifacts */
+    #adIroPicker .IroSlider { background: transparent !important; overflow: hidden !important; }
+    #adIroPicker .IroSliderGradient { border: none !important; }
+    .ad-size-wrap { display: flex; align-items: center; gap: 8px; padding: 0 4px; }
+    .ad-size-wrap.is-disabled { opacity: .45; pointer-events: none; }
+    .ad-size:disabled { cursor: not-allowed; }
+    .ad-size {
+      width: 110px; cursor: pointer;
+      -webkit-appearance: none; appearance: none;
+      height: 4px; border-radius: 2px; outline: none; border: none; background: none;
+    }
+    .ad-size::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 14px; height: 14px; border-radius: 50%;
+      background: var(--ad-brush-color, #8b5cf6); cursor: pointer;
+      margin-top: -5px;
+    }
+    .ad-size::-webkit-slider-runnable-track {
+      height: 4px; border-radius: 2px;
+      background: linear-gradient(
+        to right,
+        var(--ad-brush-color, #8b5cf6) 0%,
+        var(--ad-brush-color, #8b5cf6) var(--ad-size-fill, 12.5%),
+        rgba(255,255,255,0.15) var(--ad-size-fill, 12.5%)
+      );
+    }
+    .ad-size::-moz-range-thumb {
+      width: 14px; height: 14px; border-radius: 50%; border: none;
+      background: var(--ad-brush-color, #8b5cf6); cursor: pointer;
+    }
+    .ad-size::-moz-range-track { height: 4px; border-radius: 2px; background: rgba(255,255,255,0.15); }
+    .ad-size::-moz-range-progress { height: 4px; border-radius: 2px; background: var(--ad-brush-color, #8b5cf6); }
+    .ad-size-num { font-size: 12px; color: var(--text-sub); min-width: 22px; text-align: right; }
+    .ad-tool-clear { margin-left: auto; }
+    .ad-hint {
+      font-size: 11.5px; color: var(--text-sub); margin: 0;
+      padding: 0 4px;
+    }
+    @media (max-width: 560px) {
+      .logo { display: none; }
+      .ad-layout { grid-template-columns: 1fr; gap: 18px; }
+      .ad-sheet { height: 88vh; padding: 18px 22px 28px; }
+      .ad-sheet-inner { overflow-y: auto; max-height: calc(88vh - 110px); padding-bottom: 24px; }
+    }
+
+    .blimp-prop { transform-box: fill-box; transform-origin: center; animation: propSpin .5s linear infinite; }
+    @keyframes propSpin { to { transform: rotate(360deg); } }
+
+    /* Lecteur radio */
+    #player {
+      position: absolute; top: 18px; left: 50%; transform: translateX(-50%) translateY(-140%);
+      width: min(440px, calc(100vw - 32px));
+      background: var(--card-bg); color: var(--text); border-radius: 20px;
+      border: 1px solid var(--card-border);
+      padding: 16px 18px; z-index: 20; backdrop-filter: blur(14px);
+      box-shadow: var(--shadow);
+      transition: transform .45s cubic-bezier(.2,.9,.3,1.2), opacity .3s, background .3s;
+      opacity: 0;
+    }
+    #player.show { transform: translateX(-50%) translateY(0); opacity: 1; }
+
+    .pl-top { display: flex; align-items: center; gap: 12px; }
+    .pl-fav {
+      width: 46px; height: 46px; border-radius: 12px; flex: 0 0 auto;
+      background: linear-gradient(135deg, #8b5cf6, #5aa9d6); object-fit: cover;
+      display: flex; align-items: center; justify-content: center; font-size: 22px;
+    }
+    .pl-meta { flex: 1; min-width: 0; }
+    .pl-country { font-size: 12px; text-transform: uppercase; letter-spacing: 1px; color: var(--text-sub); display: flex; align-items: center; gap: 6px; }
+    .pl-station { font-size: 17px; font-weight: 650; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
+    .pl-status { font-size: 12.5px; color: var(--status); margin-top: 3px; min-height: 16px; }
+    .pl-status.err { color: #ff9b9b; }
+    .live-txt { display: inline-block; animation: liveBlink 2.2s ease-in-out infinite; }
+    .toast-confetti { height: 1.5em; vertical-align: -.35em; margin-right: .35em; }
+    body.dark .toast-confetti { filter: invert(1); }
+    @keyframes liveBlink { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+
+    .pl-close {
+      position: absolute; top: 12px; right: 14px; cursor: pointer; color: var(--text-sub);
+      font-size: 20px; line-height: 1; border: none; background: none; padding: 4px;
+      transition: color .2s, transform .25s cubic-bezier(.34,1.56,.64,1);
+    }
+    .pl-close:hover { color: var(--text); transform: rotate(90deg) scale(1.1); }
+    .pl-close:active { transform: rotate(90deg) scale(.9); }
+
+    .pl-ctrls { display: flex; align-items: center; gap: 14px; margin-top: 14px; }
+    .pl-btn {
+      border: none; background: var(--btn-bg); color: var(--text); cursor: pointer;
+      width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center;
+      justify-content: center;
+      transition: background .18s, transform .22s cubic-bezier(.34,1.56,.64,1), box-shadow .2s;
+    }
+    .pl-btn:hover { background: var(--btn-hover); transform: scale(1.12); }
+    .pl-btn:active { transform: scale(.88); }
+    .pl-btn.primary { width: 52px; height: 52px; background: var(--accent); }
+    .pl-btn.primary:hover { background: #9d70f7; transform: scale(1.09); box-shadow: 0 0 0 6px rgba(139,92,246,.18); }
+    .pl-btn.primary:active { transform: scale(.95); }
+    .pl-btn svg { width: 20px; height: 20px; fill: var(--text); transition: transform .2s cubic-bezier(.34,1.56,.64,1); }
+    .pl-btn.primary svg { width: 24px; height: 24px; fill: #fff; }
+    /* les flèches glissent au survol */
+    #plPrev:hover svg { transform: translateX(-2.5px); }
+    #plNext:hover svg { transform: translateX(2.5px); }
+    /* étoile favori : tourne au survol, "pop" quand on l'active */
+    #plStar:hover svg { transform: scale(1.18) rotate(-10deg); }
+    #plStar.on svg { animation: starPop .4s cubic-bezier(.34,1.56,.64,1); }
+    @keyframes starPop { 0% { transform: scale(.5); } 55% { transform: scale(1.35); } 100% { transform: scale(1); } }
+
+    .pl-vol { display: flex; align-items: center; gap: 8px; flex: 1; }
+    .pl-volbtn {
+      border: none; background: none; padding: 0; margin: 0; cursor: pointer;
+      display: flex; align-items: center; flex: 0 0 auto; color: var(--text-sub);
+      transition: color .2s;
+    }
+    .pl-volbtn:hover { color: var(--text); }
+    .pl-vol svg { width: 18px; height: 18px; fill: currentColor; flex: 0 0 auto; transition: transform .15s; }
+    .pl-volbtn:active svg { transform: scale(.82); }
+    .pl-volbtn.anim svg { animation: volPop .32s cubic-bezier(.34,1.56,.64,1); }
+    @keyframes volPop { 0% { transform: scale(.55); } 55% { transform: scale(1.2); } 100% { transform: scale(1); } }
+    .pl-vol input {
+      -webkit-appearance: none; appearance: none;
+      width: 100%; height: 5px; border-radius: 999px; cursor: pointer; outline: none;
+      background: linear-gradient(to right, var(--accent) 0%, var(--accent) var(--vol, 80%), var(--btn-bg) var(--vol, 80%));
+    }
+    .pl-vol input::-webkit-slider-thumb {
+      -webkit-appearance: none; appearance: none;
+      width: 12px; height: 12px; border-radius: 50%; background: var(--accent);
+      border: 2px solid var(--card-bg); box-shadow: 0 1px 3px rgba(0,0,0,.25);
+      transition: transform .18s cubic-bezier(.34,1.56,.64,1), box-shadow .18s;
+    }
+    .pl-vol input:hover::-webkit-slider-thumb { transform: scale(1.25); }
+    .pl-vol input:focus::-webkit-slider-thumb,
+    .pl-vol input:active::-webkit-slider-thumb { transform: scale(1.65); box-shadow: 0 0 0 6px rgba(139,92,246,.18); }
+    .pl-vol input::-moz-range-thumb {
+      width: 12px; height: 12px; border: 2px solid var(--card-bg); border-radius: 50%;
+      background: var(--accent); transition: transform .18s cubic-bezier(.34,1.56,.64,1);
+    }
+    .pl-vol input:active::-moz-range-thumb,
+    .pl-vol input:focus::-moz-range-thumb { transform: scale(1.65); }
+    .pl-vol input::-moz-range-track { height: 5px; border-radius: 999px; background: var(--btn-bg); }
+    .pl-vol input::-moz-range-progress { height: 5px; border-radius: 999px; background: var(--accent); }
+
+    .spinner {
+      width: 14px; height: 14px; border: 2px solid rgba(160,224,255,.3);
+      border-top-color: #a0e0ff; border-radius: 50%; display: inline-block;
+      animation: spin .7s linear infinite; vertical-align: -2px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+  <canvas id="dots"></canvas>
+  <div id="map"></div>
+
+  <div id="blimp" aria-hidden="true">
+    <div class="blimp-craft">
+    <img class="blimp-img" id="blimpImg" alt="" />
+    <svg class="blimp-svg" viewBox="0 0 215 116">
+      <!-- hélice arrière (tourne) -->
+      <g class="blimp-prop">
+        <ellipse cx="202" cy="30" rx="5" ry="14" fill="#eccd6a" stroke="#9c6b2f" stroke-width="1.5"/>
+        <ellipse cx="202" cy="58" rx="5" ry="14" fill="#eccd6a" stroke="#9c6b2f" stroke-width="1.5"/>
+      </g>
+      <circle cx="202" cy="44" r="4" fill="#9c6b2f"/>
+      <!-- aileron arrière -->
+      <path d="M150 56 C176 58 192 74 200 88 C182 86 162 80 148 70 Z" fill="#eccd6a" stroke="#9c6b2f" stroke-width="2" stroke-linejoin="round"/>
+      <!-- corps -->
+      <path d="M6 44 C8 29 42 20 96 20 C152 20 190 30 200 44 C190 58 152 68 96 68 C42 68 8 59 6 44 Z" fill="#f2cb55" stroke="#9c6b2f" stroke-width="2.5" stroke-linejoin="round"/>
+      <!-- panneaux -->
+      <g stroke="#9c6b2f" stroke-width="1.4" fill="none" opacity=".85">
+        <path d="M42 23 C38 38 38 50 42 65"/>
+        <path d="M80 21 C76 38 76 51 80 67"/>
+        <path d="M118 21 C114 38 114 51 118 67"/>
+        <path d="M154 24 C150 38 150 50 154 64"/>
+        <path d="M8 44 H198"/>
+      </g>
+      <ellipse cx="72" cy="32" rx="42" ry="6" fill="rgba(255,255,255,.32)"/>
+      <!-- haubans vers la nacelle -->
+      <g stroke="#5b4226" stroke-width="1" opacity=".75">
+        <line x1="62" y1="66" x2="80" y2="92"/>
+        <line x1="80" y1="67" x2="88" y2="92"/>
+        <line x1="98" y1="68" x2="98" y2="92"/>
+        <line x1="116" y1="67" x2="108" y2="92"/>
+        <line x1="132" y1="66" x2="116" y2="92"/>
+      </g>
+      <!-- nacelle -->
+      <path d="M76 92 L120 92 L113 105 L83 105 Z" fill="#b5651d" stroke="#7a3f12" stroke-width="1.5" stroke-linejoin="round"/>
+    </svg>
+    </div>
+    <div class="blimp-banner-wrap">
+      <div class="blimp-banner-wave">
+      <svg class="blimp-banner" viewBox="0 0 820 371">
+        <defs>
+          <!-- masque = drapeau SEUL (silhouette pleine, moins la zone harnais/hampe via le rectangle noir) -->
+          <mask id="flagMask" maskUnits="userSpaceOnUse" x="0" y="0" width="820" height="371">
+            <g transform="translate(0,371) scale(0.1,-0.1)">
+              <path fill="#fff" d="M2005 3296 c-57 -25 -60 -33 -63 -228 l-4 -178 -41 -29 c-217 -148 -643 -388 -1180 -662 -509 -261 -583 -303 -602 -339 -32 -61 -15 -100 82 -190 85 -80 343 -273 528 -395 367 -243 754 -440 1102 -561 69 -24 82 -32 87 -54 3 -14 10 -101 17 -195 6 -93 12 -171 14 -173 2 -2 43 -6 91 -9 69 -4 98 -2 127 10 45 19 57 46 58 135 2 119 3 120 99 159 272 110 700 153 1070 108 362 -43 533 -81 1640 -364 720 -183 1117 -245 1580 -246 506 0 891 82 1309 281 144 69 171 87 171 115 0 65 -565 629 -814 814 -42 31 -76 59 -76 63 0 12 25 46 150 202 245 308 413 593 600 1015 58 130 150 374 150 396 0 17 -36 5 -182 -62 -500 -229 -824 -302 -1353 -302 -507 0 -653 24 -1765 298 -1023 251 -1162 272 -1768 262 -325 -5 -400 -13 -620 -64 -64 -15 -133 -27 -152 -27 l-35 -1 -11 93 c-7 52 -17 99 -23 105 -15 15 -89 37 -126 36 -16 0 -44 -6 -60 -13z"/>
+            </g>
+            <rect x="0" y="0" width="225" height="371" fill="#000"/>
+          </mask>
+          <!-- zone HARNAIS/CORDES uniquement (x < 225, à gauche du drapeau) -->
+          <clipPath id="harnessClip"><rect x="0" y="0" width="225" height="371"/></clipPath>
+        </defs>
+        <!-- silhouette NOIRE : harnais + hampe + drapeau (avec le trou du harnais d'origine) -->
+        <g transform="translate(0,371) scale(0.1,-0.1)">
+          <path fill="#161616" d="M2005 3296 c-57 -25 -60 -33 -63 -228 l-4 -178 -41 -29 c-217 -148 -643 -388 -1180 -662 -509 -261 -583 -303 -602 -339 -32 -61 -15 -100 82 -190 85 -80 343 -273 528 -395 367 -243 754 -440 1102 -561 69 -24 82 -32 87 -54 3 -14 10 -101 17 -195 6 -93 12 -171 14 -173 2 -2 43 -6 91 -9 69 -4 98 -2 127 10 45 19 57 46 58 135 2 119 3 120 99 159 272 110 700 153 1070 108 362 -43 533 -81 1640 -364 720 -183 1117 -245 1580 -246 506 0 891 82 1309 281 144 69 171 87 171 115 0 65 -565 629 -814 814 -42 31 -76 59 -76 63 0 12 25 46 150 202 245 308 413 593 600 1015 58 130 150 374 150 396 0 17 -36 5 -182 -62 -500 -229 -824 -302 -1353 -302 -507 0 -653 24 -1765 298 -1023 251 -1162 272 -1768 262 -325 -5 -400 -13 -620 -64 -64 -15 -133 -27 -152 -27 l-35 -1 -11 93 c-7 52 -17 99 -23 105 -15 15 -89 37 -126 36 -16 0 -44 -6 -60 -13z m-85 -1542 c0 -421 -4 -764 -8 -762 -4 2 -53 19 -107 38 -213 74 -652 310 -969 522 -138 93 -310 218 -304 223 1 1 156 81 343 178 490 251 931 495 1005 555 14 11 28 18 32 15 5 -2 8 -349 8 -769z"/>
+        </g>
+        <!-- HARNAIS + CORDES recolorés en jaune (même tracé, découpé sur x<225 ; drapeau inchangé) -->
+        <g clip-path="url(#harnessClip)">
+          <g transform="translate(0,371) scale(0.1,-0.1)">
+            <path fill="#fadd9a" d="M2005 3296 c-57 -25 -60 -33 -63 -228 l-4 -178 -41 -29 c-217 -148 -643 -388 -1180 -662 -509 -261 -583 -303 -602 -339 -32 -61 -15 -100 82 -190 85 -80 343 -273 528 -395 367 -243 754 -440 1102 -561 69 -24 82 -32 87 -54 3 -14 10 -101 17 -195 6 -93 12 -171 14 -173 2 -2 43 -6 91 -9 69 -4 98 -2 127 10 45 19 57 46 58 135 2 119 3 120 99 159 272 110 700 153 1070 108 362 -43 533 -81 1640 -364 720 -183 1117 -245 1580 -246 506 0 891 82 1309 281 144 69 171 87 171 115 0 65 -565 629 -814 814 -42 31 -76 59 -76 63 0 12 25 46 150 202 245 308 413 593 600 1015 58 130 150 374 150 396 0 17 -36 5 -182 -62 -500 -229 -824 -302 -1353 -302 -507 0 -653 24 -1765 298 -1023 251 -1162 272 -1768 262 -325 -5 -400 -13 -620 -64 -64 -15 -133 -27 -152 -27 l-35 -1 -11 93 c-7 52 -17 99 -23 105 -15 15 -89 37 -126 36 -16 0 -44 -6 -60 -13z m-85 -1542 c0 -421 -4 -764 -8 -762 -4 2 -53 19 -107 38 -213 74 -652 310 -969 522 -138 93 -310 218 -304 223 1 1 156 81 343 178 490 251 931 495 1005 555 14 11 28 18 32 15 5 -2 8 -349 8 -769z"/>
+          </g>
+        </g>
+        <!-- média + texte, masqués au DRAPEAU seul -->
+        <g mask="url(#flagMask)">
+          <text x="517" y="205" text-anchor="middle" font-size="60" font-weight="800" fill="#fff" style="font-family:-apple-system,system-ui,sans-serif">VOTRE PUB ICI</text>
+          <!-- image calée sur la SOUS-ZONE drapeau (x 225->810), au début du drapeau après le pole -->
+          <image class="blimp-media" href="https://picsum.photos/seed/wavemap/600/330" x="225" y="40" width="585" height="322" preserveAspectRatio="xMidYMid slice"/>
+        </g>
+      </svg>
+      <div class="blimp-video-overlay">
+        <video class="blimp-video-el" muted loop playsinline preload="auto"></video>
+      </div>
+      </div>
+    </div>
+  </div>
+  <button class="theme-toggle" id="themeToggle" title="Mode clair / sombre"></button>
+  <div class="logo" id="logo">Wavemap</div>
+  <div class="tagline">Cliquez sur un pays et écoutez sa radio, en direct.</div>
+
+  <div class="topbar-right">
+  <div class="search-box">
+    <input class="search-input" id="searchInput" type="text" placeholder="Genre ou radio…" autocomplete="off" spellcheck="false" />
+    <div class="search-panel" id="searchPanel"><div class="search-list" id="searchList"></div></div>
+  </div>
+  <button class="dice-toggle" id="diceBtn" title="Pays au hasard">
+    <svg viewBox="0 0 118.91 122.88" fill="currentColor">
+      <path fill-rule="evenodd" clip-rule="evenodd" d="M6.41,23.43l49.53,20.15c1.57,0.64,4.17,1.04,5.74,0.4l52.42-21.41c1.57-0.64-0.02-3.49-1.62-4.05L59.62,0 c-0.4-0.14-10.33,3.48-11.72,3.97L4.79,19.38C3.12,19.97,4.26,22.55,6.41,23.43L6.41,23.43z M116.87,94.34l-51.73,28.06 c-1.49,0.81-3.56,0.69-3.56-1.01l-0.01-66.03c0-1.7,0.14-3.36,1.7-4.03l51.92-22.12c1.56-0.66,3.73-0.07,3.72,1.62l-0.34,59.48 C118.56,92,118.36,93.53,116.87,94.34L116.87,94.34z M104.99,71.09c3.52,1.5,4.55,6.77,2.28,11.78c-2.26,5-6.96,7.84-10.48,6.34 c-3.52-1.5-4.55-6.77-2.28-11.78C96.78,72.43,101.47,69.59,104.99,71.09L104.99,71.09z M86.22,57.28c3.65,1.55,4.7,7.01,2.36,12.19 c-2.34,5.18-7.2,8.12-10.85,6.57c-3.65-1.55-4.7-7.01-2.36-12.19C77.71,58.66,82.57,55.72,86.22,57.28L86.22,57.28z M1.81,93.89 l51.26,27.75c1.49,0.81,3.56,0.69,3.56-1.01l0.01-65.42c0-1.7-0.14-3.36-1.7-4.03L3.72,29.22C2.16,28.55,0,29.15,0,30.85 l0.11,59.02C0.11,91.56,0.32,93.08,1.81,93.89L1.81,93.89z M6.91,75.74c3.21-2.04,7.99,0.29,10.66,5.2s2.24,10.56-0.97,12.6 c-3.21,2.04-7.99-0.29-10.66-5.2C3.27,83.42,3.7,77.78,6.91,75.74L6.91,75.74z M22.06,64.37c3.4-2.06,8.45,0.29,11.28,5.26 c2.83,4.97,2.38,10.67-1.02,12.73c-3.4,2.06-8.45-0.29-11.28-5.26C18.2,72.14,18.66,66.44,22.06,64.37L22.06,64.37z M38.12,52.37 c3.42-2.07,8.51,0.29,11.36,5.26c2.85,4.97,2.39,10.68-1.03,12.74c-3.42,2.07-8.51-0.29-11.36-5.26 C34.24,60.14,34.7,54.44,38.12,52.37L38.12,52.37z M59.16,15.48c6.04,0,10.93,2.34,10.93,5.22c0,2.88-4.89,5.22-10.93,5.22 c-6.03,0-10.93-2.34-10.93-5.22C48.23,17.82,53.13,15.48,59.16,15.48L59.16,15.48z"/>
+    </svg>
+  </button>
+  <button class="fav-toggle" id="favToggle" title="Favoris">
+    <svg viewBox="0 0 24 24"><path d="M12 2.6l2.7 5.85 6.3.9-4.6 4.43 1.1 6.32L12 17.1 6.5 20.1l1.1-6.32L3 9.35l6.3-.9z"/></svg>
+    <span class="fav-badge" id="favCount"></span>
+  </button>
+  </div>
+
+  <div class="fav-panel" id="favPanel">
+    <div class="fav-head">Favoris</div>
+    <div class="fav-list" id="favList"></div>
+  </div>
+
+  <div id="player">
+    <button class="pl-close" id="plClose" title="Fermer">✕</button>
+    <div class="pl-top">
+      <div class="pl-fav" id="plFav">📻</div>
+      <div class="pl-meta">
+        <div class="pl-country" id="plCountry"><span id="plName">—</span><span id="plCount" style="margin-left:auto;margin-right:26px;color:var(--text-sub);letter-spacing:0;text-transform:none"></span></div>
+        <div class="pl-station" id="plStation">—</div>
+        <div class="pl-status" id="plStatus"></div>
+      </div>
+    </div>
+    <div class="pl-ctrls">
+      <button class="pl-btn" id="plPrev" title="Station précédente">
+        <svg viewBox="0 0 24 24"><path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/></svg>
+      </button>
+      <button class="pl-btn primary" id="plPlay" title="Lecture / Pause">
+        <svg id="plPlayIcon" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+      </button>
+      <button class="pl-btn" id="plNext" title="Station suivante">
+        <svg viewBox="0 0 24 24"><path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/></svg>
+      </button>
+      <button class="pl-btn" id="plStar" title="Ajouter aux favoris">
+        <svg viewBox="0 0 24 24"><path id="plStarPath" d="M12 2.6l2.7 5.85 6.3.9-4.6 4.43 1.1 6.32L12 17.1 6.5 20.1l1.1-6.32L3 9.35l6.3-.9z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>
+      </button>
+      <div class="pl-vol">
+        <button class="pl-volbtn" id="plMute" title="Couper le son">
+          <svg viewBox="0 0 24 24"><path id="plVolIcon" d="M3 9v6h4l5 5V4L7 9H3zm13.5 3a4.5 4.5 0 00-2.5-4v8a4.5 4.5 0 002.5-4z"/></svg>
+        </button>
+        <input type="range" id="plVol" min="0" max="1" step="0.01" value="0.8">
+      </div>
+    </div>
+  </div>
+
+  <button class="ad-fab" id="adFab" title="Votre pub" aria-label="Votre pub">
+    <svg viewBox="0 0 426 310" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <g transform="translate(0,310) scale(0.1,-0.1)">
+        <path d="M1785 2634 c-11 -1 -69 -8 -130 -14 -115 -13 -271 -41 -365 -67 -30 -8 -68 -18 -85 -23 -205 -53 -413 -157 -550 -273 -180 -153 -255 -289 -255 -463 0 -184 96 -345 291 -489 200 -147 514 -260 844 -304 196 -27 259 -31 428 -31 388 0 739 67 1100 209 26 10 32 7 112 -68 46 -43 105 -94 132 -112 l48 -34 230 3 c156 3 234 7 244 15 8 7 20 26 27 43 13 32 13 36 -51 384 -7 34 -25 90 -30 90 -1 0 -42 -13 -91 -28 -179 -57 -210 -61 -245 -33 -23 19 -23 20 -7 54 15 32 25 38 90 57 40 12 84 25 98 29 14 5 45 14 70 21 134 37 292 101 323 131 39 40 38 91 -5 133 -35 34 -159 79 -408 146 -63 17 -125 36 -138 42 -42 22 -38 89 7 103 11 3 83 -10 161 -30 83 -21 146 -33 151 -28 8 8 23 81 64 308 28 150 15 186 -67 201 -65 12 -372 7 -430 -6 -43 -11 -65 -26 -144 -101 -51 -49 -98 -89 -103 -89 -6 0 -43 13 -83 29 -337 133 -712 203 -1078 200 -74 -1 -144 -3 -155 -5z"/>
+        <path d="M2615 909 c-179 -38 -469 -69 -640 -69 -126 0 -385 23 -507 45 -127 23 -175 28 -181 19 -3 -5 -1 -36 4 -69 4 -33 13 -96 19 -140 25 -181 47 -234 123 -302 70 -61 87 -63 562 -63 403 0 427 1 479 20 98 37 155 129 181 291 9 52 20 118 25 148 6 30 10 72 10 93 0 42 -2 43 -75 27z m-913 -229 c28 -34 24 -105 -7 -135 -28 -29 -80 -33 -124 -10 -51 26 -50 123 1 160 32 23 106 15 130 -15z m353 5 c25 -25 30 -55 19 -113 -11 -55 -100 -71 -151 -28 -23 20 -28 32 -28 71 0 39 5 51 28 71 39 33 99 33 132 -1z m349 14 c36 -17 53 -86 32 -127 -20 -38 -44 -52 -88 -52 -55 1 -88 40 -88 103 0 68 74 107 144 76z"/>
+      </g>
+    </svg>
+  </button>
+  <div class="ad-modal" id="adModal">
+    <div class="ad-sheet">
+      <div class="ad-grabber"></div>
+      <button class="ad-close" id="adClose" title="Fermer">✕</button>
+      <div class="ad-sheet-inner">
+      <h2 class="ad-title">Votre message, vu du monde entier</h2>
+      <div class="ad-layout">
+        <div class="ad-offers">
+          <button class="ad-offer selected" data-offer="single">
+            <div class="ad-offer-name">Vol express</div>
+            <div class="ad-offer-price">0,99 €</div>
+            <div class="ad-offer-desc">1 vol de 20 secondes</div>
+          </button>
+          <button class="ad-offer" data-offer="pro">
+            <div class="ad-offer-name">Voyage long-courrier</div>
+            <div class="ad-offer-price">4,99 €</div>
+            <div class="ad-offer-desc">Plusieurs vols pendant 1 heure</div>
+          </button>
+        </div>
+        <div class="ad-canvas-col">
+          <div class="ad-banner-editor" id="adEditor">
+            <svg class="ad-banner-outline" viewBox="0 0 820 371" aria-hidden="true">
+              <g transform="translate(0,371) scale(0.1,-0.1)" fill="none" stroke="currentColor" stroke-width="22" stroke-linejoin="round" stroke-linecap="round">
+                <path d="M2005 3296 c-57 -25 -60 -33 -63 -228 l-4 -178 -41 -29 c-217 -148 -643 -388 -1180 -662 -509 -261 -583 -303 -602 -339 -32 -61 -15 -100 82 -190 85 -80 343 -273 528 -395 367 -243 754 -440 1102 -561 69 -24 82 -32 87 -54 3 -14 10 -101 17 -195 6 -93 12 -171 14 -173 2 -2 43 -6 91 -9 69 -4 98 -2 127 10 45 19 57 46 58 135 2 119 3 120 99 159 272 110 700 153 1070 108 362 -43 533 -81 1640 -364 720 -183 1117 -245 1580 -246 506 0 891 82 1309 281 144 69 171 87 171 115 0 65 -565 629 -814 814 -42 31 -76 59 -76 63 0 12 25 46 150 202 245 308 413 593 600 1015 58 130 150 374 150 396 0 17 -36 5 -182 -62 -500 -229 -824 -302 -1353 -302 -507 0 -653 24 -1765 298 -1023 251 -1162 272 -1768 262 -325 -5 -400 -13 -620 -64 -64 -15 -133 -27 -152 -27 l-35 -1 -11 93 c-7 52 -17 99 -23 105 -15 15 -89 37 -126 36 -16 0 -44 -6 -60 -13z m-85 -1542 c0 -421 -4 -764 -8 -762 -4 2 -53 19 -107 38 -213 74 -652 310 -969 522 -138 93 -310 218 -304 223 1 1 156 81 343 178 490 251 931 495 1005 555 14 11 28 18 32 15 5 -2 8 -349 8 -769z"/>
+              </g>
+            </svg>
+            <div class="ad-canvas-stack" id="adCanvasStack">
+              <canvas id="adImgLayer" width="585" height="322"></canvas>
+              <canvas id="adDrawLayer" width="585" height="322"></canvas>
+              <video class="ad-video-preview" id="adVideoPreview" muted loop playsinline></video>
+              <div class="ad-canvas-events" id="adEvents"></div>
+            </div>
+          </div>
+          <div class="ad-tools">
+            <button class="ad-tool" data-tool="pen" id="toolPen" title="Pinceau"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.83 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg></button>
+            <button class="ad-tool" data-tool="eraser" id="toolEraser" title="Gomme"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m7 21-4.3-4.3c-1-1-1-2.5 0-3.4l9.6-9.6c1-1 2.5-1 3.4 0l5.6 5.6c1 1 1 2.5 0 3.4L13 21"/><path d="M22 21H7"/><path d="m5 11 9 9"/></svg></button>
+            <div class="ad-color-wrap" id="adColorWrap">
+              <input type="color" id="adColor" value="#8b5cf6" aria-hidden="true" style="display:none">
+              <button class="ad-color-btn" id="adColorBtn" type="button" title="Couleur du pinceau">
+                <svg class="ad-color-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M19.54 5.08A10.61 10.61 0 0 0 11.91 2a10 10 0 0 0-.05 20 2.58 2.58 0 0 0 2.53-1.89 2.52 2.52 0 0 0-.57-2.28.5.5 0 0 1 .37-.83h1.65A6.15 6.15 0 0 0 22 11.33a8.48 8.48 0 0 0-2.46-6.25zM15.88 15h-1.65a2.49 2.49 0 0 0-1.87 4.15.49.49 0 0 1 .12.49c-.05.21-.28.34-.59.36a8 8 0 0 1-7.82-9.11A8.1 8.1 0 0 1 11.92 4H12a8.47 8.47 0 0 1 6.1 2.48 6.5 6.5 0 0 1 1.9 4.77A4.17 4.17 0 0 1 15.88 15z"/><circle cx="12" cy="6.5" r="1.5"/><path d="M15.25 7.2a1.5 1.5 0 1 0 2.05.55 1.5 1.5 0 0 0-2.05-.55z"/><path d="M8.75 7.2a1.5 1.5 0 1 0 .55 2.05 1.5 1.5 0 0 0-.55-2.05z"/><path d="M6.16 11.26a1.5 1.5 0 1 0 2.08.4 1.49 1.49 0 0 0-2.08-.4z"/></svg>
+              </button>
+              <div class="ad-color-popover" id="adColorPopover" role="dialog" aria-label="Couleur">
+                <div id="adIroPicker"></div>
+              </div>
+            </div>
+            <div class="ad-size-wrap">
+              <input type="range" class="ad-size" id="adSize" min="1" max="40" value="6" title="Taille du pinceau">
+              <span class="ad-size-num" id="adSizeVal">6</span>
+            </div>
+            <div class="ad-media-wrap" id="adMediaWrap">
+              <input type="file" id="adFile" accept="image/*" hidden>
+              <input type="file" id="adVideoFile" accept="video/*" hidden>
+              <button class="ad-tool" id="adMediaBtn" title="Ajouter un média">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+              </button>
+              <div class="ad-media-dropdown" id="adMediaDropdown">
+                <button class="ad-media-option" id="adMediaImage">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg>
+                  Ajouter une image
+                </button>
+                <button class="ad-media-option" id="adMediaVideo">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m16 13 5.223 3.482a.5.5 0 0 0 .777-.416V7.87a.5.5 0 0 0-.752-.432L16 10.5"/><rect x="2" y="6" width="14" height="12" rx="2"/></svg>
+                  Ajouter une vidéo
+                </button>
+              </div>
+            </div>
+            <button class="ad-tool" data-tool="image" id="toolImage" disabled title="Déplacer / zoomer l'image (uploadez d'abord)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="5 9 2 12 5 15"/><polyline points="9 5 12 2 15 5"/><polyline points="15 19 12 22 9 19"/><polyline points="19 9 22 12 19 15"/><line x1="2" y1="12" x2="22" y2="12"/><line x1="12" y1="2" x2="12" y2="22"/></svg></button>
+            <button class="ad-tool ad-tool-clear" id="adClearBtn" title="Tout effacer"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg></button>
+          </div>
+        </div>
+      </div>
+      <button class="ad-launch" id="adLaunch" disabled><span class="ad-launch-label">Paré au décollage</span></button>
+      <p class="ad-status" id="adStatus" hidden></p>
+      <p class="ad-note">Contenu modéré · Pas de contenu choquant, haineux ou illégal. Vous devez détenir les droits de votre image ou vidéo.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Clip-path SVG : épouse la silhouette exacte du drapeau pour le canvas créatif.
+       Le path d sera précalculé en coords objectBoundingBox 0–1 par le script en bas (le transform
+       sur <g> à l'intérieur d'un clipPath objectBoundingBox n'est pas honoré par tous les moteurs). -->
+  <svg width="0" height="0" style="position:absolute;pointer-events:none" aria-hidden="true">
+    <defs>
+      <clipPath id="adFlagClip" clipPathUnits="objectBoundingBox">
+        <path id="adFlagClipPath" d="M0 0"/>
+      </clipPath>
+    </defs>
+  </svg>
+
+  <audio id="audio" preload="auto"></audio>
+
+  <script>
+    /* ================= i18n ================= */
+    const LANGS = ['fr','en','es','de','pt','it','ja','zh','ko','ru','ar'];
+    const LANG = (() => { const l = (navigator.language || 'fr').slice(0,2); return LANGS.includes(l) ? l : 'fr'; })();
+    const _Li = LANGS.indexOf(LANG);
+    const _T = {
+      tagline: ['Cliquez sur un pays et écoutez sa radio, en direct.','Click on a country and listen to its radio, live.','Haz clic en un país y escucha su radio en directo.','Klicke auf ein Land und höre sein Radio live.','Clique num país e ouça a sua rádio ao vivo.','Clicca su un paese e ascolta la sua radio in diretta.','国をクリックしてラジオをライブで聴こう','点击一个国家，收听电台直播','나라를 클릭하고 라디오를 실시간으로 들어보세요','Нажмите на страну и слушайте радио в прямом эфире.','انقر على بلد واستمع إلى إذاعته مباشرة'],
+      searchPh: ['Genre ou radio…','Genre or station…','Género o emisora…','Genre oder Sender…','Gênero ou rádio…','Genere o stazione…','ジャンルまたは局名…','类型或电台…','장르 또는 방송국…','Жанр или радио…','النوع أو المحطة…'],
+      favorites: ['Favoris','Favorites','Favoritos','Favoriten','Favoritos','Preferiti','お気に入り','收藏','즐겨찾기','Избранное','المفضلة'],
+      adTitle: ['Votre message, vu du monde entier','Your message, seen by the whole world','Tu mensaje, visto por el mundo entero','Deine Botschaft, von der ganzen Welt gesehen','Sua mensagem, vista pelo mundo inteiro','Il tuo messaggio, visto dal mondo intero','あなたのメッセージを世界中に届けよう','你的消息，让全世界看到','당신의 메시지를 전 세계에 보여주세요','Ваше сообщение увидит весь мир','رسالتك يراها العالم بأسره'],
+      offerSingle: ['Vol express','Express flight','Vuelo exprés','Expressflug','Voo expresso','Volo express','エクスプレス便','快速飞行','급행 비행','Экспресс-рейс','رحلة سريعة'],
+      offerSingleDesc: ['1 vol de 20 secondes','1 flight, 20 seconds','1 vuelo de 20 segundos','1 Flug, 20 Sekunden','1 voo de 20 segundos','1 volo di 20 secondi','20秒のフライト1回','1次20秒飞行','20초 비행 1회','1 полёт — 20 секунд','رحلة واحدة، 20 ثانية'],
+      offerPro: ['Voyage long-courrier','Long-haul voyage','Viaje de larga distancia','Langstreckenflug','Viagem de longa distância','Viaggio a lungo raggio','長距離フライト','长途飞行','장거리 비행','Дальний рейс','رحلة طويلة المدى'],
+      offerProDesc: ['Plusieurs vols pendant 1 heure','Multiple flights over 1 hour','Varios vuelos durante 1 hora','Mehrere Flüge über 1 Stunde','Vários voos durante 1 hora','Diversi voli per 1 ora','1時間の複数フライト','1小时内多次飞行','1시간 동안 여러 번 비행','Несколько полётов за 1 час','عدة رحلات خلال ساعة واحدة'],
+      addImage: ['Ajouter une image','Add an image','Añadir una imagen','Bild hinzufügen','Adicionar uma imagem','Aggiungi un\'immagine','画像を追加','添加图片','이미지 추가','Добавить изображение','إضافة صورة'],
+      addVideo: ['Ajouter une vidéo','Add a video','Añadir un vídeo','Video hinzufügen','Adicionar um vídeo','Aggiungi un video','動画を追加','添加视频','동영상 추가','Добавить видео','إضافة فيديو'],
+      launch: ['Paré au décollage','Ready for takeoff','Listo para despegar','Startbereit','Pronto para decolar','Pronti al decollo','発進準備完了','准备起飞','이륙 준비 완료','Готов к взлёту','جاهز للإقلاع'],
+      adNote: ['Contenu modéré · Pas de contenu choquant, haineux ou illégal. Vous devez détenir les droits de votre image ou vidéo.','Content moderated · No shocking, hateful or illegal content. You must own the rights to your image or video.','Contenido moderado · Sin contenido ofensivo, de odio o ilegal. Debes tener los derechos de tu imagen o vídeo.','Inhalte werden moderiert · Keine schockierenden, hasserfüllten oder illegalen Inhalte. Sie müssen die Rechte an Ihrem Bild oder Video besitzen.','Conteúdo moderado · Sem conteúdo chocante, de ódio ou ilegal. Você deve deter os direitos da sua imagem ou vídeo.','Contenuto moderato · Nessun contenuto scioccante, d\'odio o illegale. Devi possedere i diritti della tua immagine o video.','コンテンツは審査されます · 不快・違法なコンテンツは禁止です。画像や動画の権利を保有している必要があります。','内容审核 · 禁止令人不适、仇恨或违法的内容。您必须拥有图片或视频的版权。','콘텐츠 검수 · 충격적이거나 혐오 또는 불법 콘텐츠 금지. 이미지나 동영상의 권리를 보유해야 합니다.','Контент модерируется · Запрещён шокирующий, оскорбительный или незаконный контент. Вы должны обладать правами на изображение или видео.','المحتوى خاضع للمراجعة · ممنوع المحتوى الصادم أو الكراهية أو غير القانوني. يجب أن تملك حقوق صورتك أو فيديوك.'],
+      bannerText: ['VOTRE PUB ICI','YOUR AD HERE','TU ANUNCIO AQUÍ','IHRE WERBUNG HIER','SEU ANÚNCIO AQUI','IL TUO ANNUNCIO QUI','ここに広告を','您的广告位','여기에 광고를','ВАША РЕКЛАМА ЗДЕСЬ','إعلانك هنا'],
+      close: ['Fermer','Close','Cerrar','Schließen','Fechar','Chiudi','閉じる','关闭','닫기','Закрыть','إغلاق'],
+      pen: ['Pinceau','Brush','Pincel','Pinsel','Pincel','Pennello','ブラシ','画笔','브러시','Кисть','فرشاة'],
+      eraser: ['Gomme','Eraser','Borrador','Radierer','Borracha','Gomma','消しゴム','橡皮擦','지우개','Ластик','ممحاة'],
+      brushColor: ['Couleur du pinceau','Brush color','Color del pincel','Pinselfarbe','Cor do pincel','Colore del pennello','ブラシの色','画笔颜色','브러시 색상','Цвет кисти','لون الفرشاة'],
+      brushSize: ['Taille du pinceau','Brush size','Tamaño del pincel','Pinselgröße','Tamanho do pincel','Dimensione pennello','ブラシサイズ','画笔大小','브러시 크기','Размер кисти','حجم الفرشاة'],
+      moveTipOff: ['Déplacer / zoomer l\'image (uploadez d\'abord)','Move / zoom image (upload first)','Mover / zoom imagen (sube una primero)','Bild verschieben / zoomen (erst hochladen)','Mover / zoom imagem (faça upload primeiro)','Sposta / zoom immagine (carica prima)','画像の移動/ズーム（まずアップロード）','移动/缩放图片（请先上传）','이미지 이동/확대 (먼저 업로드)','Переместить / масштабировать (сначала загрузите)','تحريك / تكبير الصورة (ارفع أولاً)'],
+      moveTipOn: ['Déplacer / zoomer l\'image (molette)','Move / zoom image (scroll wheel)','Mover / zoom imagen (rueda del ratón)','Bild verschieben / zoomen (Mausrad)','Mover / zoom imagem (roda do mouse)','Sposta / zoom immagine (rotella)','画像の移動/ズーム（マウスホイール）','移动/缩放图片（鼠标滚轮）','이미지 이동/확대 (마우스 휠)','Переместить / масштабировать (колесо мыши)','تحريك / تكبير الصورة (عجلة الماوس)'],
+      addMedia: ['Ajouter un média','Add media','Añadir un medio','Medium hinzufügen','Adicionar mídia','Aggiungi media','メディアを追加','添加媒体','미디어 추가','Добавить медиа','إضافة وسائط'],
+      clearAll: ['Tout effacer','Clear all','Borrar todo','Alles löschen','Apagar tudo','Cancella tutto','すべて消去','全部清除','모두 지우기','Очистить всё','مسح الكل'],
+      prevStation: ['Station précédente','Previous station','Emisora anterior','Vorheriger Sender','Estação anterior','Stazione precedente','前の局','上一个电台','이전 방송국','Предыдущая станция','المحطة السابقة'],
+      playPause: ['Lecture / Pause','Play / Pause','Reproducir / Pausa','Abspielen / Pause','Reproduzir / Pausar','Play / Pausa','再生 / 一時停止','播放 / 暂停','재생 / 일시정지','Воспроизведение / Пауза','تشغيل / إيقاف'],
+      nextStationTip: ['Station suivante','Next station','Siguiente emisora','Nächster Sender','Próxima estação','Stazione successiva','次の局','下一个电台','다음 방송국','Следующая станция','المحطة التالية'],
+      addFav: ['Ajouter aux favoris','Add to favorites','Añadir a favoritos','Zu Favoriten hinzufügen','Adicionar aos favoritos','Aggiungi ai preferiti','お気に入りに追加','添加到收藏','즐겨찾기에 추가','Добавить в избранное','إضافة إلى المفضلة'],
+      mute: ['Couper le son','Mute','Silenciar','Stummschalten','Silenciar','Disattiva audio','ミュート','静音','음소거','Выключить звук','كتم الصوت'],
+      yourAd: ['Votre pub','Your ad','Tu anuncio','Ihre Werbung','Seu anúncio','Il tuo annuncio','あなたの広告','你的广告','당신의 광고','Ваша реклама','إعلانك'],
+      remove: ['Retirer','Remove','Quitar','Entfernen','Remover','Rimuovi','削除','移除','제거','Удалить','إزالة'],
+      color: ['Couleur','Color','Color','Farbe','Cor','Colore','色','颜色','색상','Цвет','لون'],
+      verifying: ['Vérification…','Verifying…','Verificando…','Überprüfung…','Verificando…','Verifica…','確認中…','验证中…','확인 중…','Проверка…','جارٍ التحقق…'],
+      videoAnalysis: ['Analyse de votre vidéo en cours…','Analyzing your video…','Analizando tu vídeo…','Video wird analysiert…','Analisando seu vídeo…','Analisi del video…','動画を解析中…','正在分析视频…','동영상 분석 중…','Анализ видео…','جارٍ تحليل الفيديو…'],
+      videoRejected: ['Vidéo refusée : elle semble contenir du contenu inapproprié. Changez-la puis réessayez.','Video rejected: it appears to contain inappropriate content. Change it and try again.','Vídeo rechazado: parece contener contenido inapropiado. Cámbialo e inténtalo de nuevo.','Video abgelehnt: es scheint unangemessene Inhalte zu enthalten. Ändern Sie es und versuchen Sie es erneut.','Vídeo recusado: parece conter conteúdo inapropriado. Altere-o e tente novamente.','Video rifiutato: sembra contenere contenuti inappropriati. Cambialo e riprova.','動画が拒否されました：不適切なコンテンツが含まれています。変更して再試行してください。','视频被拒绝：似乎包含不当内容。请更改后重试。','동영상이 거부되었습니다: 부적절한 콘텐츠가 포함된 것 같습니다. 변경 후 다시 시도하세요.','Видео отклонено: содержит неподходящий контент. Измените и попробуйте снова.','تم رفض الفيديو: يبدو أنه يحتوي على محتوى غير لائق. قم بتغييره وحاول مرة أخرى.'],
+      imageAnalysis: ['Analyse de votre visuel en cours…','Analyzing your image…','Analizando tu imagen…','Bild wird analysiert…','Analisando sua imagem…','Analisi dell\'immagine…','画像を解析中…','正在分析图片…','이미지 분석 중…','Анализ изображения…','جارٍ تحليل الصورة…'],
+      imageRejected: ['Visuel refusé : il semble contenir du contenu inapproprié. Modifiez-le puis réessayez.','Image rejected: it appears to contain inappropriate content. Edit it and try again.','Imagen rechazada: parece contener contenido inapropiado. Modifícala e inténtalo de nuevo.','Bild abgelehnt: es scheint unangemessene Inhalte zu enthalten. Bearbeiten Sie es und versuchen Sie es erneut.','Imagem recusada: parece conter conteúdo inapropriado. Modifique-a e tente novamente.','Immagine rifiutata: sembra contenere contenuti inappropriati. Modificala e riprova.','画像が拒否されました：不適切なコンテンツが含まれています。修正して再試行してください。','图片被拒绝：似乎包含不当内容。请修改后重试。','이미지가 거부되었습니다: 부적절한 콘텐츠가 포함된 것 같습니다. 수정 후 다시 시도하세요.','Изображение отклонено: содержит неподходящий контент. Измените и попробуйте снова.','تم رفض الصورة: يبدو أنها تحتوي على محتوى غير لائق. قم بتعديلها وحاول مرة أخرى.'],
+      uploading: ['Envoi de votre création…','Uploading your creation…','Enviando tu creación…','Kreation wird hochgeladen…','Enviando sua criação…','Invio della creazione…','作品をアップロード中…','正在上传作品…','작품 업로드 중…','Загрузка вашего творения…','جارٍ رفع إبداعك…'],
+      redirectPay: ['Redirection vers le paiement…','Redirecting to payment…','Redirigiendo al pago…','Weiterleitung zur Zahlung…','Redirecionando para o pagamento…','Reindirizzamento al pagamento…','決済ページへ移動中…','正在跳转到支付页面…','결제 페이지로 이동 중…','Перенаправление на оплату…','جارٍ التحويل إلى الدفع…'],
+      openPay: ['Ouverture du paiement sécurisé…','Opening secure payment…','Abriendo pago seguro…','Sichere Zahlung wird geöffnet…','Abrindo pagamento seguro…','Apertura pagamento sicuro…','安全な決済を開いています…','正在打开安全支付…','보안 결제 열기…','Открытие безопасной оплаты…','جارٍ فتح الدفع الآمن…'],
+      errorPfx: ['Erreur : ','Error: ','Error: ','Fehler: ','Erro: ','Errore: ','エラー: ','错误: ','오류: ','Ошибка: ','خطأ: '],
+      payCancelled: ['Paiement annulé — votre contenu est conservé, vous pouvez réessayer.','Payment cancelled — your content is saved, you can try again.','Pago cancelado — tu contenido está guardado, puedes intentarlo de nuevo.','Zahlung abgebrochen — Ihr Inhalt ist gespeichert, versuchen Sie es erneut.','Pagamento cancelado — seu conteúdo está salvo, tente novamente.','Pagamento annullato — il tuo contenuto è salvato, puoi riprovare.','決済がキャンセルされました — コンテンツは保存されています。再試行できます。','支付已取消 — 内容已保存，可以重试。','결제가 취소되었습니다 — 콘텐츠가 저장되어 있습니다. 다시 시도할 수 있습니다.','Оплата отменена — контент сохранён, попробуйте снова.','تم إلغاء الدفع — محتواك محفوظ، يمكنك المحاولة مرة أخرى.'],
+      payOnAir: ['__C__ Paiement confirmé ! Votre message est à l\'antenne.','🎉 Payment confirmed! Your ad is on air — it\'s flying right now.','🎉 ¡Pago confirmado! Tu anuncio está en el aire — está volando ahora mismo.','🎉 Zahlung bestätigt! Ihre Werbung ist auf Sendung — sie fliegt gerade.','🎉 Pagamento confirmado! Seu anúncio está no ar — está voando agora.','🎉 Pagamento confermato! Il tuo annuncio è in onda — sta volando ora.','🎉 決済完了！広告は放映中 — 今まさに飛んでいます。','🎉 支付成功！广告正在播出 — 正在飞行中。','🎉 결제 완료! 광고가 방영 중 — 지금 비행하고 있습니다.','🎉 Оплата подтверждена! Реклама в эфире — летит прямо сейчас.','🎉 تم تأكيد الدفع! إعلانك على الهواء — يحلّق الآن.'],
+      payQueued: ['__C__ Paiement confirmé ! Votre message est en file d\'attente (position {pos}).','🎉 Payment confirmed! Your ad is queued (position {pos}).','🎉 ¡Pago confirmado! Tu anuncio está en cola (posición {pos}).','🎉 Zahlung bestätigt! Ihre Werbung ist in der Warteschlange (Position {pos}).','🎉 Pagamento confirmado! Seu anúncio está na fila (posição {pos}).','🎉 Pagamento confermato! Annuncio in coda (posizione {pos}).','🎉 決済完了！広告はキューに入りました（{pos}番目）。','🎉 支付成功！广告在排队中（第{pos}位）。','🎉 결제 완료! 광고가 대기열에 있습니다 (위치 {pos}).','🎉 Оплата подтверждена! Реклама в очереди (позиция {pos}).','🎉 تم تأكيد الدفع! إعلانك في الطابور (الموضع {pos}).'],
+      paySoon: ['__C__ Paiement confirmé ! Votre message est en file, il volera très bientôt.','🎉 Payment confirmed! Your ad is queued — it will fly very soon.','🎉 ¡Pago confirmado! Tu anuncio está en cola, volará muy pronto.','🎉 Zahlung bestätigt! Ihre Werbung ist in der Warteschlange — sie fliegt sehr bald.','🎉 Pagamento confirmado! Seu anúncio está na fila, voará muito em breve.','🎉 Pagamento confermato! Annuncio in coda — volerà molto presto.','🎉 決済完了！広告はキュー内です。まもなく飛行します。','🎉 支付成功！广告已排队，即将起飞。','🎉 결제 완료! 광고가 대기 중이며 곧 비행합니다.','🎉 Оплата подтверждена! Реклама в очереди — скоро полетит.','🎉 تم تأكيد الدفع! إعلانك في الطابور، سيحلّق قريبًا جدًا.'],
+      payFailed: ['Le paiement n\'a pas pu être confirmé. Réessayez.','Payment could not be confirmed. Try again.','No se ha podido confirmar el pago. Inténtalo de nuevo.','Zahlung konnte nicht bestätigt werden. Versuchen Sie es erneut.','Pagamento não confirmado. Tente novamente.','Pagamento non confermato. Riprova.','決済を確認できませんでした。再試行してください。','无法确认支付。请重试。','결제를 확인할 수 없습니다. 다시 시도하세요.','Оплата не подтверждена. Попробуйте снова.','تعذّر تأكيد الدفع. حاول مرة أخرى.'],
+      payError: ['Erreur lors de la confirmation du paiement.','Error confirming payment.','Error al confirmar el pago.','Fehler bei der Zahlungsbestätigung.','Erro ao confirmar o pagamento.','Errore nella conferma del pagamento.','決済確認中にエラーが発生しました。','确认支付时出错。','결제 확인 중 오류가 발생했습니다.','Ошибка при подтверждении оплаты.','خطأ أثناء تأكيد الدفع.'],
+      imgTooBig: ['Image trop lourde (max 5 Mo).','Image too large (max 5 MB).','Imagen demasiado pesada (máx. 5 MB).','Bild zu groß (max. 5 MB).','Imagem muito pesada (máx. 5 MB).','Immagine troppo pesante (max 5 MB).','画像が大きすぎます（最大5 MB）。','图片太大（最大5 MB）。','이미지가 너무 큽니다 (최대 5 MB).','Изображение слишком большое (макс. 5 МБ).','الصورة كبيرة جدًا (الحد 5 ميجابايت).'],
+      vidTooBig: ['Vidéo trop lourde (max 25 Mo).','Video too large (max 25 MB).','Vídeo demasiado pesado (máx. 25 MB).','Video zu groß (max. 25 MB).','Vídeo muito pesado (máx. 25 MB).','Video troppo pesante (max 25 MB).','動画が大きすぎます（最大25 MB）。','视频太大（最大25 MB）。','동영상이 너무 큽니다 (최대 25 MB).','Видео слишком большое (макс. 25 МБ).','الفيديو كبير جدًا (الحد 25 ميجابايت).'],
+      vidTooLong: ['Vidéo trop longue (max 20 s).','Video too long (max 20 s).','Vídeo demasiado largo (máx. 20 s).','Video zu lang (max. 20 s).','Vídeo muito longo (máx. 20 s).','Video troppo lungo (max 20 s).','動画が長すぎます（最大20秒）。','视频太长（最大20秒）。','동영상이 너무 깁니다 (최대 20초).','Видео слишком длинное (макс. 20 с).','الفيديو طويل جدًا (الحد 20 ثانية).'],
+      vidBad: ['Vidéo illisible ou format non supporté.','Video unreadable or unsupported format.','Vídeo ilegible o formato no compatible.','Video nicht lesbar oder nicht unterstütztes Format.','Vídeo ilegível ou formato não suportado.','Video illeggibile o formato non supportato.','動画を読み込めないかサポートされていない形式です。','视频无法读取或格式不受支持。','동영상을 읽을 수 없거나 지원되지 않는 형식입니다.','Видео нечитаемо или формат не поддерживается.','الفيديو غير قابل للقراءة أو التنسيق غير مدعوم.'],
+      noFav: ['Aucun favori','No favorites','Sin favoritos','Keine Favoriten','Nenhum favorito','Nessun preferito','お気に入りなし','没有收藏','즐겨찾기 없음','Нет избранного','لا توجد مفضلات'],
+      noResult: ['Aucun résultat','No results','Sin resultados','Keine Ergebnisse','Nenhum resultado','Nessun risultato','結果なし','无结果','결과 없음','Нет результатов','لا توجد نتائج'],
+      searching: ['Recherche…','Searching…','Buscando…','Suche…','Pesquisando…','Ricerca…','検索中…','搜索中…','검색 중…','Поиск…','جارٍ البحث…'],
+      connecting: ['Connexion…','Connecting…','Conectando…','Verbinde…','Conectando…','Connessione…','接続中…','连接中…','연결 중…','Подключение…','جارٍ الاتصال…'],
+      noStation: ['Aucune station ne répond pour ce pays 😕','No station responding for this country 😕','Ninguna emisora responde para este país 😕','Kein Sender antwortet für dieses Land 😕','Nenhuma estação responde para este país 😕','Nessuna stazione risponde per questo paese 😕','この国の局が応答しません 😕','该国没有电台响应 😕','이 나라의 방송국이 응답하지 않습니다 😕','Ни одна станция не отвечает 😕','لا توجد محطة تستجيب لهذا البلد 😕'],
+      noStream: ['Flux indisponibles pour ce pays 😕','Streams unavailable for this country 😕','Emisiones no disponibles para este país 😕','Streams nicht verfügbar für dieses Land 😕','Transmissões indisponíveis para este país 😕','Stream non disponibili per questo paese 😕','この国のストリームは利用できません 😕','该国的流媒体不可用 😕','이 나라의 스트림을 사용할 수 없습니다 😕','Потоки недоступны для этой страны 😕','البث غير متاح لهذا البلد 😕'],
+      nextSt: ['Station suivante…','Next station…','Siguiente emisora…','Nächster Sender…','Próxima estação…','Stazione successiva…','次の局…','下一个电台…','다음 방송국…','Следующая станция…','المحطة التالية…'],
+      searchRadios: ['Recherche des radios…','Searching for stations…','Buscando emisoras…','Sender werden gesucht…','Pesquisando estações…','Ricerca stazioni…','ラジオ局を検索中…','搜索电台中…','방송국 검색 중…','Поиск радио…','جارٍ البحث عن المحطات…'],
+      noCC: ['Pas de code pays disponible 😕','No country code available 😕','Código de país no disponible 😕','Kein Ländercode verfügbar 😕','Código do país não disponível 😕','Codice paese non disponibile 😕','国コードが利用できません 😕','没有可用的国家代码 😕','국가 코드를 사용할 수 없습니다 😕','Код страны недоступен 😕','رمز البلد غير متاح 😕'],
+      live: ['● En direct','● Live','● En directo','● Live','● Ao vivo','● In diretta','● ライブ','● 直播中','● 실시간','● В эфире','● مباشر'],
+      buffering: ['Mise en mémoire…','Buffering…','Cargando…','Puffern…','Carregando…','Buffering…','バッファリング中…','缓冲中…','버퍼링 중…','Буферизация…','جارٍ التحميل…'],
+      noRadio: ['Aucune radio trouvée pour ce pays 😕','No radio found for this country 😕','No se encontró radio para este país 😕','Kein Radio für dieses Land gefunden 😕','Nenhuma rádio encontrada para este país 😕','Nessuna radio trovata per questo paese 😕','この国のラジオが見つかりません 😕','未找到该国的电台 😕','이 나라의 라디오를 찾을 수 없습니다 😕','Радио для этой страны не найдено 😕','لم يتم العثور على إذاعة لهذا البلد 😕'],
+      retry: [' — réessaie',' — try again',' — inténtalo de nuevo',' — versuche es erneut',' — tente novamente',' — riprova',' — 再試行してください',' — 请重试',' — 다시 시도하세요',' — попробуйте снова',' — حاول مرة أخرى'],
+    };
+    function t(k, v) {
+      let s = (_T[k] || [])[_Li] || (_T[k] || [])[0] || k;
+      if (v) for (const p in v) s = s.split('{' + p + '}').join(v[p]);
+      return s;
+    }
+    function applyI18n() {
+      document.documentElement.lang = LANG;
+      if (LANG === 'fr') return;
+      const q = s => document.querySelector(s);
+      const qa = s => document.querySelectorAll(s);
+      q('.tagline').textContent = t('tagline');
+      q('#searchInput').placeholder = t('searchPh');
+      q('.fav-head').textContent = t('favorites');
+      q('.ad-title').textContent = t('adTitle');
+      qa('.ad-offer')[0].querySelector('.ad-offer-name').textContent = t('offerSingle');
+      qa('.ad-offer')[0].querySelector('.ad-offer-desc').textContent = t('offerSingleDesc');
+      qa('.ad-offer')[1].querySelector('.ad-offer-name').textContent = t('offerPro');
+      qa('.ad-offer')[1].querySelector('.ad-offer-desc').textContent = t('offerProDesc');
+      q('#adMediaImage').lastChild.textContent = ' ' + t('addImage');
+      q('#adMediaVideo').lastChild.textContent = ' ' + t('addVideo');
+      q('.ad-note').textContent = t('adNote');
+      q('#adClose').title = t('close');
+      q('#toolPen').title = t('pen');
+      q('#toolEraser').title = t('eraser');
+      q('#adColorBtn').title = t('brushColor');
+      q('.ad-color-popover').setAttribute('aria-label', t('color'));
+      q('#adSize').title = t('brushSize');
+      q('#toolImage').title = t('moveTipOff');
+      q('#adMediaBtn').title = t('addMedia');
+      q('#adClearBtn').title = t('clearAll');
+      q('#plClose').title = t('close');
+      q('#plPrev').title = t('prevStation');
+      q('#plPlay').title = t('playPause');
+      q('#plNext').title = t('nextStationTip');
+      q('#plStar').title = t('addFav');
+      q('#plMute').title = t('mute');
+      q('#adFab').title = t('yourAd');
+      q('#adFab').setAttribute('aria-label', t('yourAd'));
+      const svgText = q('.blimp-banner text');
+      if (svgText) svgText.textContent = t('bannerText');
+      const ll = q('.ad-launch-label');
+      if (ll) {
+        ll.innerHTML = [...t('launch')].map((ch, i) =>
+          ch === ' ' ? ' ' : '<span class="ad-launch-letter" style="animation-delay:' + (i * 0.07).toFixed(2) + 's">' + ch + '</span>'
+        ).join('');
+      }
+    }
+
+    /* ================= GLOBE ================= */
+    const GLOBE_ZOOM = 3.6;
+    // Pousse le centre du globe au bas de l'écran (dôme coupé par le bord bas)
+    function applyGlobeOffset() {
+      map.setPadding({ top: window.innerHeight, right: 0, bottom: 0, left: 0 });
+    }
+    const map = new maplibregl.Map({
+      container: 'map',
+      style: 'https://tiles.openfreemap.org/styles/liberty',
+      center: [10, 35],
+      zoom: GLOBE_ZOOM,
+      minZoom: GLOBE_ZOOM,        // zoom verrouillé
+      maxZoom: GLOBE_ZOOM,
+      attributionControl: false,
+      // Interactions : on garde la rotation, on coupe le zoom
+      scrollZoom: false,
+      boxZoom: false,
+      doubleClickZoom: false,
+      touchZoomRotate: false,
+      dragRotate: false,
+      keyboard: false
+    });
+
+    // Pays en résolution 50m : tracé bien plus précis (s'aligne sur les frontières roses).
+    // Pour un calage encore plus fin (mais ~12 Mo), remplace "50m" par "10m".
+    const COUNTRIES_URL = 'https://cdn.jsdelivr.net/gh/nvkelso/natural-earth-vector@master/geojson/ne_50m_admin_0_countries.geojson';
+
+    // Liste des pays en mémoire (pour le pays aléatoire / la recherche)
+    let countriesData = [];
+    fetch(COUNTRIES_URL).then(r => r.json()).then(j => {
+      countriesData = j.features
+        .map(f => f.properties)
+        .filter(p => p.ISO_A2_EH && p.ISO_A2_EH !== '-99' && p.LABEL_X != null);
+    }).catch(() => {});
+
+    map.on('style.load', () => {
+      map.setProjection({ type: 'globe' });
+      applyGlobeOffset();
+      applySky();
+
+      // Labels anglais
+      for (const layer of map.getStyle().layers) {
+        if (layer.type === 'symbol' && layer.layout && layer.layout['text-field']) {
+          map.setLayoutProperty(layer.id, 'text-field', ['coalesce', ['get', 'name:en'], ['get', 'name:latin'], ['get', 'name']]);
+        }
+      }
+
+      const setIf = (id, prop, val) => { if (map.getLayer(id)) map.setPaintProperty(id, prop, val); };
+      setIf('water', 'fill-color', '#4cb4e8');
+      setIf('boundary_2', 'line-color', '#e2929e');
+      setIf('boundary_2', 'line-width', 1);
+      setIf('boundary_3', 'line-color', '#ecbcc4');
+      setIf('boundary_disputed', 'line-color', '#e2929e');
+      setIf('water_name_point_label', 'text-color', '#5aa9d6');
+      setIf('water_name_line_label', 'text-color', '#5aa9d6');
+      if (map.getLayer('natural_earth')) {
+        map.setPaintProperty('natural_earth', 'raster-saturation', 0.45);
+        map.setPaintProperty('natural_earth', 'raster-contrast', -0.22);
+        map.setPaintProperty('natural_earth', 'raster-hue-rotate', 12);
+        map.setPaintProperty('natural_earth', 'raster-brightness-min', 0.12);
+      }
+      setIf('landcover_grass', 'fill-color', 'rgba(150, 208, 122, 1)');
+      setIf('landcover_wood', 'fill-color', 'hsla(102, 60%, 66%, 0.8)');
+
+      if (!map.getLayer('label_continent')) {
+        map.addLayer({
+          id: 'label_continent', type: 'symbol', source: 'openmaptiles', 'source-layer': 'place',
+          filter: ['==', ['get', 'class'], 'continent'],
+          layout: { 'text-field': ['coalesce', ['get', 'name:en'], ['get', 'name']], 'text-font': ['Noto Sans Regular'], 'text-size': 15, 'text-transform': 'uppercase', 'text-letter-spacing': 0.18, 'text-max-width': 9 },
+          paint: { 'text-color': 'hsl(0,0%,58%)', 'text-halo-color': 'rgba(255,255,255,0.85)', 'text-halo-width': 1.2 }
+        });
+      }
+
+      // --- Pays cliquables + surbrillance ---
+      const beforeId = map.getLayer('boundary_2') ? 'boundary_2' : undefined;
+      map.addSource('countries', { type: 'geojson', data: COUNTRIES_URL });
+      map.addLayer({ id: 'countries-fill', type: 'fill', source: 'countries', paint: { 'fill-color': '#000', 'fill-opacity': 0 } }, beforeId);
+      map.addLayer({
+        id: 'countries-hl', type: 'fill', source: 'countries',
+        filter: ['==', ['get', 'ISO_A2_EH'], '___none___'],
+        paint: { 'fill-color': '#8b5cf6', 'fill-opacity': 0.32 }
+      }, beforeId);
+
+      // Pulse (onde) autour du pays écouté : un point + 2 cercles animés
+      map.addSource('pulse', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+      const pulsePaint = {
+        'circle-color': '#8b5cf6', 'circle-opacity': 0, 'circle-radius': 6,
+        'circle-stroke-color': '#8b5cf6', 'circle-stroke-width': 2.5, 'circle-stroke-opacity': 0
+      };
+      map.addLayer({ id: 'pulse-2', type: 'circle', source: 'pulse', paint: { ...pulsePaint } }, beforeId);
+      map.addLayer({ id: 'pulse-1', type: 'circle', source: 'pulse', paint: { ...pulsePaint } }, beforeId);
+
+      map.on('mouseenter', 'countries-fill', () => map.getCanvas().style.cursor = 'pointer');
+      map.on('mouseleave', 'countries-fill', () => map.getCanvas().style.cursor = '');
+      map.on('click', 'countries-fill', onCountryClick);
+    });
+
+    /* ============== THÈME CLAIR / SOMBRE ============== */
+    const ICON_MOON = '<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M12 3a9 9 0 109 9c0-.46-.04-.92-.11-1.36a5.39 5.39 0 01-4.39 2.26 5.4 5.4 0 01-5.4-5.4c0-1.81.89-3.41 2.26-4.39C13.92 3.04 13.46 3 13 3h-1z"/></svg>';
+    const ICON_SUN = '<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M12 7c-2.76 0-5 2.24-5 5s2.24 5 5 5 5-2.24 5-5-2.24-5-5-5zM2 13h2c.55 0 1-.45 1-1s-.45-1-1-1H2c-.55 0-1 .45-1 1s.45 1 1 1zm18 0h2c.55 0 1-.45 1-1s-.45-1-1-1h-2c-.55 0-1 .45-1 1s.45 1 1 1zM11 2v2c0 .55.45 1 1 1s1-.45 1-1V2c0-.55-.45-1-1-1s-1 .45-1 1zm0 18v2c0 .55.45 1 1 1s1-.45 1-1v-2c0-.55-.45-1-1-1s-1 .45-1 1zM5.99 4.58c-.39-.39-1.03-.39-1.41 0-.39.39-.39 1.03 0 1.41l1.06 1.06c.39.39 1.03.39 1.41 0s.39-1.03 0-1.41L5.99 4.58zm12.37 12.37c-.39-.39-1.03-.39-1.41 0-.39.39-.39 1.03 0 1.41l1.06 1.06c.39.39 1.03.39 1.41 0 .39-.39.39-1.03 0-1.41l-1.06-1.06zm1.06-10.96c.39-.39.39-1.03 0-1.41-.39-.39-1.03-.39-1.41 0l-1.06 1.06c-.39.39-.39 1.03 0 1.41s1.03.39 1.41 0l1.06-1.06zM7.05 18.36c.39-.39.39-1.03 0-1.41-.39-.39-1.03-.39-1.41 0l-1.06 1.06c-.39.39-.39 1.03 0 1.41s1.03.39 1.41 0l1.06-1.06z"/></svg>';
+    let dark = localStorage.getItem('globe-theme') === 'dark';
+
+    function applySky() {
+      // Espace transparent autour du globe -> laisse voir la grille de points derrière
+      if (!map.style) return;
+      map.setSky({
+        'sky-color': 'rgba(0,0,0,0)', 'horizon-color': 'rgba(0,0,0,0)', 'fog-color': 'rgba(0,0,0,0)',
+        'sky-horizon-blend': 0, 'horizon-fog-blend': 0, 'fog-ground-blend': 0, 'atmosphere-blend': 0
+      });
+    }
+
+    function applyTheme() {
+      document.body.classList.toggle('dark', dark);
+      document.getElementById('themeToggle').innerHTML = dark ? ICON_SUN : ICON_MOON;
+      if (map.isStyleLoaded && map.isStyleLoaded()) applySky();
+    }
+
+    document.getElementById('themeToggle').addEventListener('click', () => {
+      dark = !dark;
+      localStorage.setItem('globe-theme', dark ? 'dark' : 'light');
+      applyTheme();
+    });
+
+    applyTheme(); // applique l'état initial (depuis localStorage)
+
+    /* ============== ROTATION AUTO ============== */
+    const SECONDS_PER_REVOLUTION = 120;
+    let userInteracting = false;
+    let radioActive = false;
+    let lastTime = performance.now();
+    function spinFrame(now) {
+      const dt = (now - lastTime) / 1000; lastTime = now;
+      if (!userInteracting && !radioActive) {
+        const c = map.getCenter();
+        c.lng += (360 / SECONDS_PER_REVOLUTION) * dt;
+        map.setCenter(c);
+      }
+      requestAnimationFrame(spinFrame);
+    }
+    requestAnimationFrame(spinFrame);
+    map.on('mousedown', () => userInteracting = true);
+    map.on('touchstart', () => userInteracting = true);
+    map.on('dragstart', () => userInteracting = true);
+    ['mouseup', 'touchend', 'dragend'].forEach(ev => map.on(ev, () => { userInteracting = false; lastTime = performance.now(); }));
+
+    // Redimensionnement / zoom navigateur : on garde le globe correctement placé et dimensionné
+    let resizeRaf = null;
+    window.addEventListener('resize', () => {
+      if (resizeRaf) cancelAnimationFrame(resizeRaf);
+      resizeRaf = requestAnimationFrame(() => {
+        map.resize();
+        applyGlobeOffset();
+      });
+    });
+
+    /* ============== DIRIGEABLES PUBLICITAIRES (pool + diffusion partagée) ==============
+       Les pubs payées sont stockées sur le serveur et diffusées à TOUS les visiteurs.
+       On interroge /api/onair toutes les 4 s et on répartit les pubs « à l'antenne »
+       sur un pool de dirigeables (jusqu'à MAX_BLIMPS volant en même temps). */
+    (function () {
+      const template = document.getElementById('blimp');
+      if (!template) return;
+
+      // Dépose ton PNG (nez à droite) dans /blimps puis ajoute son nom ici.
+      const MY_BLIMPS = ['dirigeable_1_droite.png'];
+      const CROSS_SECONDS = 35;
+      const MAX_BLIMPS = 3;
+
+      function makeBlimp(index) {
+        const el = index === 0 ? template : template.cloneNode(true);
+        if (index > 0) { el.removeAttribute('id'); el.classList.add('blimp-unit'); template.parentNode.appendChild(el); }
+        el.style.display = 'none';
+
+        const imgEl   = el.querySelector('.blimp-img');
+        const media   = el.querySelector('.blimp-media');
+        const overlay = el.querySelector('.blimp-video-overlay');
+        const videoEl = el.querySelector('.blimp-video-el');
+        const craftEl = el.querySelector('.blimp-craft');
+        const waveEl  = el.querySelector('.blimp-banner-wave');
+
+        let dir = null, x = 0, flying = false, videoMode = false, adId = null, airStartedAt = null;
+        const yBase = 0.16 + index * 0.13;   // étage vertical distinct -> évite les chevauchements
+        const yPhase = index * 2.1;
+
+        media.addEventListener('error', () => { if (!videoMode) media.style.display = 'none'; });
+
+        function totalWidth() { return (el.offsetWidth || 440) + 40; }
+        function pickRandomBlimp() {
+          const file = MY_BLIMPS[Math.floor(Math.random() * MY_BLIMPS.length)];
+          imgEl.onload  = () => el.classList.add('has-img');
+          imgEl.onerror = () => el.classList.remove('has-img');
+          imgEl.src = `blimps/${file}`;
+        }
+        function setBannerMedia(m) {
+          if (!m) {
+            videoMode = false; overlay.style.display = 'none';
+            try { videoEl.pause(); videoEl.removeAttribute('src'); videoEl.load(); } catch (e) {}
+            media.removeAttribute('href'); media.style.display = 'none';
+            return;
+          }
+          if (m.type === 'video') {
+            videoMode = true;
+            media.removeAttribute('href'); media.style.display = '';   // ancre de position pour l'overlay
+            if (videoEl.getAttribute('src') !== m.url) videoEl.src = m.url;
+            videoEl.play().catch(() => {});
+            overlay.style.display = 'block';
+          } else {
+            videoMode = false; overlay.style.display = 'none';
+            try { videoEl.pause(); } catch (e) {}
+            media.setAttribute('href', m.url); media.style.display = '';
+          }
+        }
+        function restartAnims() {
+          [craftEl, waveEl].forEach(n => { if (n) n.style.animation = 'none'; });
+          void el.offsetWidth;
+          [craftEl, waveEl].forEach(n => { if (n) n.style.animation = ''; });
+        }
+        // Dérive la position et la direction depuis l'horloge murale — fonctionne même
+        // si l'onglet était caché (rAF suspendu) car on ne s'appuie plus sur dt.
+        function computeState() {
+          if (!airStartedAt) return;
+          const w = innerWidth;
+          const total = totalWidth();
+          const elapsed = Math.max(0, (Date.now() - airStartedAt) / 1000);
+          const passIndex = Math.floor(elapsed / CROSS_SECONDS);
+          const t = (elapsed % CROSS_SECONDS) / CROSS_SECONDS;
+          const newDir = (passIndex % 2 === 0) ? -1 : 1;
+          if (newDir !== dir) {
+            dir = newDir;
+            el.classList.toggle('dir-right', dir > 0);
+            if (flying) restartAnims();
+          }
+          x = dir < 0 ? (w + 40) - t * (w + 40 + total) : -total + t * (w + 40 + total);
+        }
+        function launch() {
+          pickRandomBlimp();
+          dir = null;
+          el.style.display = '';
+          flying = true;
+          computeState();
+        }
+        return {
+          get adId() { return adId; },
+          assign(ad) { adId = ad.id; airStartedAt = ad.airStartedAt; setBannerMedia({ type: ad.type, url: ad.url }); launch(); },
+          stop() { adId = null; airStartedAt = null; flying = false; el.style.display = 'none'; setBannerMedia(null); },
+          step(now, dt) {
+            if (!flying) return;
+            computeState();
+            const y = innerHeight * yBase + Math.sin(now / 1000 + yPhase) * 12 + Math.sin(now / 1700 + yPhase + 1) * 6;
+            el.style.transform = `translate(${x}px, ${y}px)`;
+          },
+        };
+      }
+
+      const pool = [];
+      for (let i = 0; i < MAX_BLIMPS; i++) pool.push(makeBlimp(i));
+
+      let last = performance.now();
+      function frame(now) {
+        const dt = Math.min(0.05, (now - last) / 1000); last = now;
+        for (const b of pool) b.step(now, dt);
+        requestAnimationFrame(frame);
+      }
+      requestAnimationFrame(frame);
+
+      // Répartit les pubs « à l'antenne » (du serveur) sur les dirigeables libres.
+      function reconcile(onAir) {
+        const ids = new Set(onAir.map(a => a.id));
+        for (const b of pool) if (b.adId && !ids.has(b.adId)) b.stop();
+        for (const ad of onAir) {
+          if (pool.some(b => b.adId === ad.id)) continue;
+          const free = pool.find(b => !b.adId);
+          if (free) free.assign(ad);
+        }
+      }
+      async function poll() {
+        try {
+          const r = await fetch('/api/onair', { cache: 'no-store' });
+          const data = await r.json();
+          reconcile(Array.isArray(data.ads) ? data.ads : []);
+        } catch (e) {}
+      }
+      poll();
+      setInterval(poll, 4000);
+    })();
+
+    /* ============== MODALE PUB (offres + canvas créatif) ============== */
+    (function () {
+      /* --- Précompile le clipPath du drapeau en coords objectBoundingBox 0–1.
+         (Le <g transform="..."> imbriqué dans un clipPath objectBoundingBox n'est pas
+         honoré par tous les moteurs, donc on applique la matrice à la main au path d.) */
+      (function precompileFlagClipPath() {
+        // Path d'origine (déjà présent dans le SVG outline visible) :
+        const D = document.querySelector('.ad-banner-outline path').getAttribute('d');
+        // Matrice : x_norm = x_path/5850 - 225/585 ; y_norm = -y_path/3220 + 331/322
+        // (flag bbox = x ∈ [225, 810], y ∈ [40, 362] — 225 = début réel du drapeau, après le pole)
+        const SX = 1 / 5850, SY = -1 / 3220, TX = -225 / 585, TY = 331 / 322;
+        const tokens = D.match(/[MmLlHhVvCcSsQqTtAaZz]|-?\d*\.?\d+(?:[eE][-+]?\d+)?/g);
+        const fmt = n => (Math.round(n * 1e6) / 1e6).toString();
+        const isNum = t => /^[-.\d]/.test(t);
+        const paramCount = { m:2, l:2, h:1, v:1, c:6, s:4, q:4, t:2, a:7 };
+        const out = [];
+        let i = 0;
+        while (i < tokens.length) {
+          const cmd = tokens[i++];
+          if (cmd.toLowerCase() === 'z') { out.push(cmd); continue; }
+          const lc = cmd.toLowerCase();
+          const n = paramCount[lc];
+          const absolute = cmd === cmd.toUpperCase();
+          out.push(cmd);
+          let first = true;
+          while (i < tokens.length && isNum(tokens[i])) {
+            const p = [];
+            for (let k = 0; k < n; k++) p.push(parseFloat(tokens[i++]));
+            // Pour M/m, les groupes suivants sont implicitement L/l
+            const effLc = (!first && (lc === 'm')) ? 'l' : lc;
+            const useAbs = absolute && (first || lc !== 'm' || true); // pour 'M' multi-pair: absolute, pour 'm': relative
+            // Simplification : on traite chaque groupe avec la "case" du cmd ; pour notre path
+            // les groupes multiples n'existent que pour 'c' (relatif), donc OK.
+            if (effLc === 'h') {
+              p[0] = useAbs ? p[0] * SX + TX : p[0] * SX;
+            } else if (effLc === 'v') {
+              p[0] = useAbs ? p[0] * SY + TY : p[0] * SY;
+            } else if (effLc === 'a') {
+              p[0] = Math.abs(p[0] * SX);
+              p[1] = Math.abs(p[1] * SY);
+              p[5] = useAbs ? p[5] * SX + TX : p[5] * SX;
+              p[6] = useAbs ? p[6] * SY + TY : p[6] * SY;
+            } else {
+              for (let k = 0; k + 1 < p.length; k += 2) {
+                p[k]   = useAbs ? p[k]   * SX + TX : p[k]   * SX;
+                p[k+1] = useAbs ? p[k+1] * SY + TY : p[k+1] * SY;
+              }
+            }
+            out.push(p.map(fmt).join(' '));
+            first = false;
+          }
+        }
+        document.getElementById('adFlagClipPath').setAttribute('d', out.join(' '));
+      })();
+
+      applyI18n();
+
+      const modal = document.getElementById('adModal');
+      const fab = document.getElementById('adFab');
+      const launchBtn = document.getElementById('adLaunch');
+      (() => {
+        const label = launchBtn.querySelector('.ad-launch-label');
+        label.innerHTML = [...label.textContent].map((ch, i) =>
+          ch === ' '
+            ? ' '
+            : `<span class="ad-launch-letter" style="animation-delay:${(i * 0.07).toFixed(2)}s">${ch}</span>`
+        ).join('');
+      })();
+      const offers = [...document.querySelectorAll('.ad-offer')];
+      let chosenOffer = 'single';
+
+      function open() { modal.classList.add('open'); }
+      function close() { modal.classList.remove('open'); }
+      fab.addEventListener('click', open);
+      document.getElementById('adClose').addEventListener('click', close);
+      modal.addEventListener('click', (e) => { if (e.target === modal) close(); });
+
+      offers.forEach(o => o.addEventListener('click', () => {
+        offers.forEach(x => x.classList.remove('selected'));
+        o.classList.add('selected');
+        chosenOffer = o.dataset.offer;
+      }));
+
+      /* ===== Éditeur canvas ===== */
+      const stack    = document.getElementById('adCanvasStack');
+      const imgLayer = document.getElementById('adImgLayer');
+      const drawLayer= document.getElementById('adDrawLayer');
+      const events   = document.getElementById('adEvents');
+      const imgCtx   = imgLayer.getContext('2d');
+      const drawCtx  = drawLayer.getContext('2d');
+      drawCtx.lineCap = 'round';
+      drawCtx.lineJoin = 'round';
+
+      const colorEl = document.getElementById('adColor');
+      const sizeEl  = document.getElementById('adSize');
+      const sizeVal = document.getElementById('adSizeVal');
+      const fileEl  = document.getElementById('adFile');
+      const videoFileEl  = document.getElementById('adVideoFile');
+      const videoPreview = document.getElementById('adVideoPreview');
+      const toolPen   = document.getElementById('toolPen');
+      const toolEraser= document.getElementById('toolEraser');
+      const toolImage = document.getElementById('toolImage');
+      const clearBtn  = document.getElementById('adClearBtn');
+
+      let tool = 'pen';
+      let color = colorEl.value;
+      let brushSize = parseInt(sizeEl.value, 10);
+      let hasDrawing = false;
+      let userImg = null;
+      let userVideo = null;                 // Blob de la vidéo choisie (mode vidéo)
+      let videoURL = null;                  // object URL courant pour l'aperçu
+      let imgT = { x: 0, y: 0, scale: 1 }; // décalage + zoom autour du fit "cover"
+
+      /* ===== Stockage vidéo (IndexedDB) : survit à la redirection Stripe ===== */
+      function idbVideo(action, blob) {
+        return new Promise((resolve, reject) => {
+          const req = indexedDB.open('wavemap', 1);
+          req.onupgradeneeded = () => req.result.createObjectStore('media');
+          req.onerror = () => reject(req.error);
+          req.onsuccess = () => {
+            const db = req.result;
+            const tx = db.transaction('media', 'readwrite');
+            const store = tx.objectStore('media');
+            const op = action === 'put' ? store.put(blob, 'pendingVideo')
+                     : action === 'del' ? store.delete('pendingVideo')
+                     : store.get('pendingVideo');
+            op.onsuccess = () => resolve(op.result);
+            op.onerror = () => reject(op.error);
+            tx.oncomplete = () => db.close();
+          };
+        });
+      }
+
+      /* ===== Mode vidéo (aperçu + bascule des outils) ===== */
+      function setDrawToolsDisabled(on) {
+        [toolPen, toolEraser].forEach(b => { if (b) b.disabled = on; });
+        const colorBtn = document.getElementById('adColorBtn');
+        if (colorBtn) colorBtn.disabled = on;
+        sizeEl.disabled = on;
+        const sizeWrap = sizeEl.closest('.ad-size-wrap');
+        if (sizeWrap) sizeWrap.classList.toggle('is-disabled', on);
+      }
+      function enterVideoMode(blob) {
+        // une vidéo remplace tout dessin/image
+        drawCtx.clearRect(0, 0, drawLayer.width, drawLayer.height);
+        imgCtx.clearRect(0, 0, imgLayer.width, imgLayer.height);
+        userImg = null; hasDrawing = false; imgT = { x: 0, y: 0, scale: 1 };
+        toolImage.disabled = true;
+        userVideo = blob;
+        if (videoURL) URL.revokeObjectURL(videoURL);
+        videoURL = URL.createObjectURL(blob);
+        videoPreview.src = videoURL;
+        videoPreview.play().catch(() => {});
+        stack.classList.add('mode-video');
+        setDrawToolsDisabled(true);
+        updateLaunch();
+      }
+      function exitVideoMode() {
+        userVideo = null;
+        if (videoURL) { URL.revokeObjectURL(videoURL); videoURL = null; }
+        try { videoPreview.pause(); videoPreview.removeAttribute('src'); videoPreview.load(); } catch (e) {}
+        stack.classList.remove('mode-video');
+        setDrawToolsDisabled(false);
+      }
+
+      // Extrait quelques images de la vidéo (pour la modération)
+      function extractFrames(blob, times) {
+        return new Promise((resolve, reject) => {
+          const url = URL.createObjectURL(blob);
+          const v = document.createElement('video');
+          v.muted = true; v.preload = 'auto'; v.src = url;
+          const frames = [];
+          const c = document.createElement('canvas');
+          const ctx = c.getContext('2d');
+          let i = 0, dur = 1;
+          const done = (err) => { URL.revokeObjectURL(url); err ? reject(err) : resolve(frames); };
+          v.onloadeddata = () => {
+            dur = (v.duration && isFinite(v.duration)) ? v.duration : 1;
+            const W = 480;
+            c.width = W;
+            c.height = Math.round(W * ((v.videoHeight || 9) / (v.videoWidth || 16)));
+            seekNext();
+          };
+          function seekNext() {
+            if (i >= times.length) return done();
+            v.currentTime = Math.min(dur * times[i], Math.max(0, dur - 0.05));
+          }
+          v.onseeked = () => {
+            try { ctx.drawImage(v, 0, 0, c.width, c.height); frames.push(c.toDataURL('image/jpeg', 0.85)); }
+            catch (e) {}
+            i++; seekNext();
+          };
+          v.onerror = () => done(new Error('Vidéo illisible'));
+        });
+      }
+
+      function setTool(t) {
+        if (t === 'image' && !userImg) return;
+        tool = t;
+        [toolPen, toolEraser, toolImage].forEach(b => {
+          if (!b) return;
+          b.classList.toggle('active', b.dataset.tool === t);
+        });
+        stack.classList.remove('tool-pen', 'tool-eraser', 'tool-image');
+        stack.classList.add('tool-' + t);
+      }
+      setTool('pen');
+
+      colorEl.addEventListener('input', () => { color = colorEl.value; });
+
+      /* ===== Roue de couleur (iro.js) ===== */
+      (function() {
+        const wrap = document.getElementById('adColorWrap');
+        const btn  = document.getElementById('adColorBtn');
+        const pop  = document.getElementById('adColorPopover');
+        const picker = new iro.ColorPicker('#adIroPicker', {
+          width: 170,
+          color: '#8b5cf6',
+          borderWidth: 2,
+          borderColor: 'rgba(255,255,255,0.25)',
+          handleRadius: 8,
+          layout: [
+            { component: iro.ui.Wheel, options: {} },
+            { component: iro.ui.Slider, options: { sliderType: 'value' } }
+          ]
+        });
+
+        function applyColor(hex) {
+          colorEl.value = hex;
+          colorEl.dispatchEvent(new Event('input'));
+          btn.style.background = hex;
+          sizeEl.style.setProperty('--ad-brush-color', hex);
+        }
+
+        picker.on('color:change', c => applyColor(c.hexString));
+        applyColor('#8b5cf6');
+
+        btn.addEventListener('click', () => pop.classList.toggle('open'));
+        document.addEventListener('click', e => { if (!wrap.contains(e.target)) pop.classList.remove('open'); });
+      })();
+
+      /* ===== Dropdown média ===== */
+      (function() {
+        const mediaWrap     = document.getElementById('adMediaWrap');
+        const mediaBtn      = document.getElementById('adMediaBtn');
+        const mediaDropdown = document.getElementById('adMediaDropdown');
+        mediaBtn.addEventListener('click', e => {
+          e.stopPropagation();
+          mediaDropdown.classList.toggle('open');
+        });
+        document.getElementById('adMediaImage').addEventListener('click', () => {
+          mediaDropdown.classList.remove('open');
+          fileEl.click();
+        });
+        document.getElementById('adMediaVideo').addEventListener('click', () => {
+          mediaDropdown.classList.remove('open');
+          videoFileEl.click();
+        });
+        document.addEventListener('click', e => {
+          if (!mediaWrap.contains(e.target)) mediaDropdown.classList.remove('open');
+        });
+      })();
+
+      function updateSliderFill() {
+        const pct = ((sizeEl.value - sizeEl.min) / (sizeEl.max - sizeEl.min) * 100).toFixed(1) + '%';
+        sizeEl.style.setProperty('--ad-size-fill', pct);
+      }
+      sizeEl.addEventListener('input', () => {
+        brushSize = parseInt(sizeEl.value, 10);
+        sizeVal.textContent = brushSize;
+        updateSliderFill();
+      });
+      updateSliderFill();
+      toolPen   .addEventListener('click', () => setTool('pen'));
+      toolEraser.addEventListener('click', () => setTool('eraser'));
+      toolImage .addEventListener('click', () => setTool('image'));
+
+      function redrawImg() {
+        imgCtx.clearRect(0, 0, imgLayer.width, imgLayer.height);
+        if (!userImg) return;
+        // baseline = cover (remplit la banderole), puis on applique la transform user
+        const base = Math.max(imgLayer.width / userImg.naturalWidth,
+                              imgLayer.height / userImg.naturalHeight);
+        const s = base * imgT.scale;
+        const w = userImg.naturalWidth * s;
+        const h = userImg.naturalHeight * s;
+        const x = (imgLayer.width  - w) / 2 + imgT.x;
+        const y = (imgLayer.height - h) / 2 + imgT.y;
+        imgCtx.drawImage(userImg, x, y, w, h);
+      }
+
+      fileEl.addEventListener('change', () => {
+        const f = fileEl.files && fileEl.files[0];
+        if (!f || !f.type.startsWith('image/')) return;
+        if (f.size > 5 * 1024 * 1024) { alert(t('imgTooBig')); return; }
+        exitVideoMode();  // une image annule un éventuel mode vidéo
+        const reader = new FileReader();
+        reader.onload = () => {
+          const im = new Image();
+          im.onload = () => {
+            userImg = im;
+            imgT = { x: 0, y: 0, scale: 1 };
+            redrawImg();
+            toolImage.disabled = false;
+            toolImage.title = t('moveTipOn');
+            setTool('image');
+            updateLaunch();
+          };
+          im.src = reader.result;
+        };
+        reader.readAsDataURL(f);
+      });
+
+      videoFileEl.addEventListener('change', () => {
+        const f = videoFileEl.files && videoFileEl.files[0];
+        videoFileEl.value = '';
+        if (!f || !f.type.startsWith('video/')) return;
+        if (f.size > 25 * 1024 * 1024) { alert(t('vidTooBig')); return; }
+        const testURL = URL.createObjectURL(f);
+        const tv = document.createElement('video');
+        tv.preload = 'metadata';
+        tv.onloadedmetadata = () => {
+          const dur = tv.duration;
+          URL.revokeObjectURL(testURL);
+          if (isFinite(dur) && dur > 20.5) { alert(t('vidTooLong')); return; }
+          enterVideoMode(f);
+        };
+        tv.onerror = () => { URL.revokeObjectURL(testURL); alert(t('vidBad')); };
+        tv.src = testURL;
+      });
+
+      function eventPos(e) {
+        const r = events.getBoundingClientRect();
+        return [
+          (e.clientX - r.left) * drawLayer.width  / r.width,
+          (e.clientY - r.top)  * drawLayer.height / r.height
+        ];
+      }
+
+      let drag = null;
+      let lastX = 0, lastY = 0, lastMidX = 0, lastMidY = 0;
+
+      events.addEventListener('pointerdown', (e) => {
+        e.preventDefault();
+        events.setPointerCapture(e.pointerId);
+        if (tool === 'image' && userImg) {
+          drag = { mode: 'image', sx: e.clientX, sy: e.clientY, bx: imgT.x, by: imgT.y };
+          return;
+        }
+        drag = { mode: 'draw' };
+        const [x, y] = eventPos(e);
+        lastX = x; lastY = y; lastMidX = x; lastMidY = y;
+        drawCtx.globalCompositeOperation = (tool === 'eraser') ? 'destination-out' : 'source-over';
+        drawCtx.fillStyle = color;
+        drawCtx.beginPath();
+        drawCtx.arc(x, y, brushSize / 2, 0, Math.PI * 2);
+        drawCtx.fill();
+        hasDrawing = true;
+        updateLaunch();
+      });
+
+      events.addEventListener('pointermove', (e) => {
+        if (!drag) return;
+        if (drag.mode === 'image') {
+          const r = events.getBoundingClientRect();
+          const sx = drawLayer.width / r.width;
+          imgT.x = drag.bx + (e.clientX - drag.sx) * sx;
+          imgT.y = drag.by + (e.clientY - drag.sy) * sx;
+          redrawImg();
+          return;
+        }
+        const [x, y] = eventPos(e);
+        const midX = (lastX + x) / 2;
+        const midY = (lastY + y) / 2;
+        drawCtx.globalCompositeOperation = (tool === 'eraser') ? 'destination-out' : 'source-over';
+        drawCtx.strokeStyle = color;
+        drawCtx.lineWidth = brushSize;
+        drawCtx.beginPath();
+        drawCtx.moveTo(lastMidX, lastMidY);
+        drawCtx.quadraticCurveTo(lastX, lastY, midX, midY);
+        drawCtx.stroke();
+        lastMidX = midX; lastMidY = midY;
+        lastX = x; lastY = y;
+      });
+
+      const endDrag = () => { drag = null; };
+      events.addEventListener('pointerup', endDrag);
+      events.addEventListener('pointercancel', endDrag);
+      events.addEventListener('pointerleave', endDrag);
+
+      events.addEventListener('wheel', (e) => {
+        if (tool !== 'image' || !userImg) return;
+        e.preventDefault();
+        const factor = Math.exp(-e.deltaY * 0.0015);
+        imgT.scale = Math.max(0.25, Math.min(6, imgT.scale * factor));
+        redrawImg();
+      }, { passive: false });
+
+      clearBtn.addEventListener('click', () => {
+        drawCtx.clearRect(0, 0, drawLayer.width, drawLayer.height);
+        imgCtx.clearRect(0, 0, imgLayer.width, imgLayer.height);
+        userImg = null;
+        imgT = { x: 0, y: 0, scale: 1 };
+        hasDrawing = false;
+        fileEl.value = '';
+        toolImage.disabled = true;
+        exitVideoMode();
+        setTool('pen');
+        updateLaunch();
+      });
+
+      function hasContent() { return !!userImg || hasDrawing || !!userVideo; }
+      function updateLaunch() {
+        const ready = hasContent();
+        launchBtn.disabled = !ready;
+        launchBtn.classList.toggle('ad-ready', ready);
+        // Certains moteurs (WebKit) n'annulent l'animation CSS qu'en fin d'itération
+        // et ignorent le box-shadow !important : on tue l'animation directement.
+        if (!ready) launchBtn.getAnimations().forEach(a => a.cancel());
+      }
+
+      function exportComposite() {
+        const c = document.createElement('canvas');
+        c.width = drawLayer.width; c.height = drawLayer.height;
+        const ctx = c.getContext('2d');
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, c.width, c.height);
+        ctx.drawImage(imgLayer, 0, 0);
+        ctx.drawImage(drawLayer, 0, 0);
+        return c.toDataURL('image/png');
+      }
+
+      const statusEl = document.getElementById('adStatus');
+      function setStatus(msg, kind) {
+        if (!msg) { statusEl.hidden = true; statusEl.textContent = ''; return; }
+        statusEl.hidden = false;
+        statusEl.textContent = msg;
+        statusEl.className = 'ad-status is-' + (kind || 'info');
+      }
+
+      // Upload du média (image/vidéo) sur le serveur -> { mediaId, url, type }
+      async function uploadMedia(fileOrBlob, fallbackName) {
+        const fd = new FormData();
+        fd.append('media', fileOrBlob, (fileOrBlob && fileOrBlob.name) || fallbackName);
+        const r = await fetch('/api/upload', { method: 'POST', body: fd });
+        const data = await r.json();
+        if (!r.ok || !data.mediaId) throw new Error(data.message || "Échec de l'envoi du média");
+        return data;
+      }
+
+      // Petite notification flottante (confirmation de paiement / file)
+      function showToast(msg) {
+        const t = document.createElement('div');
+        t.innerHTML = msg.replace('__C__', '<img src="/confetti.svg" class="toast-confetti" aria-hidden="true">');
+        t.style.cssText = 'position:fixed;top:78px;left:50%;transform:translateX(-50%);z-index:200;' +
+          'background:var(--card-bg);color:var(--text);border:1px solid var(--card-border);border-radius:14px;' +
+          'padding:14px 20px;box-shadow:0 14px 34px rgba(0,0,0,.2);font-size:14px;font-weight:600;' +
+          'max-width:90vw;text-align:center;line-height:1.4';
+        document.body.appendChild(t);
+        setTimeout(() => { t.style.transition = 'opacity .5s'; t.style.opacity = '0'; setTimeout(() => t.remove(), 500); }, 6500);
+      }
+
+      let busy = false;
+      launchBtn.addEventListener('click', async () => {
+        if (!hasContent() || busy) return;
+        busy = true;
+        const labelEl = launchBtn.querySelector('.ad-launch-label');
+        const originalLabel = labelEl.textContent;
+        launchBtn.disabled = true;
+        launchBtn.classList.remove('ad-ready');
+        launchBtn.getAnimations().forEach(a => a.cancel());
+
+        const cancelLaunch = () => { labelEl.textContent = originalLabel; busy = false; updateLaunch(); };
+        try {
+          if (userVideo) {
+            // ===== Mode VIDÉO =====
+            labelEl.textContent = t('verifying');
+            setStatus(t('videoAnalysis'), 'info');
+            let frames = [];
+            try { frames = await extractFrames(userVideo, [0.05, 0.5]); } catch (e) {}
+            for (const frame of frames) {
+              const r = await fetch('/api/moderate', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ image: frame }),
+              });
+              const m = await r.json();
+              if (!r.ok) throw new Error(m.message || 'Échec de la vérification');
+              if (m.flagged) {
+                setStatus(t('videoRejected'), 'error');
+                cancelLaunch();
+                return;
+              }
+            }
+            // mémorise la vidéo (IndexedDB) + marqueur léger (localStorage)
+            await idbVideo('put', userVideo);
+            localStorage.setItem('wavemap_pending_ad', JSON.stringify({ kind: 'video', offer: chosenOffer }));
+          } else {
+            // ===== Mode IMAGE =====
+            const image = exportComposite();
+            labelEl.textContent = t('verifying');
+            setStatus(t('imageAnalysis'), 'info');
+            const modRes = await fetch('/api/moderate', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ image }),
+            });
+            const mod = await modRes.json();
+            if (!modRes.ok) throw new Error(mod.message || 'Échec de la vérification');
+            if (mod.flagged) {
+              setStatus(t('imageRejected'), 'error');
+              cancelLaunch();
+              return;
+            }
+            localStorage.setItem('wavemap_pending_ad', JSON.stringify({ kind: 'image', image, offer: chosenOffer }));
+          }
+
+          // ===== Upload du média sur le serveur (avant paiement) =====
+          labelEl.textContent = t('uploading');
+          setStatus(t('uploading'), 'info');
+          const up = userVideo
+            ? await uploadMedia(userVideo, 'ad.webm')
+            : await uploadMedia(await (await fetch(exportComposite())).blob(), 'ad.png');
+
+          // ===== Paiement =====
+          labelEl.textContent = t('redirectPay');
+          setStatus(t('openPay'), 'info');
+          const sessRes = await fetch('/api/create-checkout-session', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ offer: chosenOffer, mediaId: up.mediaId, type: up.type }),
+          });
+          const sess = await sessRes.json();
+          if (!sessRes.ok || !sess.url) throw new Error(sess.message || 'Impossible de créer la session de paiement');
+          window.location.href = sess.url;
+        } catch (e) {
+          setStatus(t('errorPfx') + e.message, 'error');
+          labelEl.textContent = originalLabel;
+          busy = false;
+          updateLaunch();
+        }
+      });
+
+      // Restaure un visuel (image composite aplatie) dans le canvas de dessin
+      function restoreDrawing(dataUrl) {
+        return new Promise((resolve) => {
+          const img = new Image();
+          img.onload = () => {
+            imgCtx.clearRect(0, 0, imgLayer.width, imgLayer.height);
+            drawCtx.clearRect(0, 0, drawLayer.width, drawLayer.height);
+            drawCtx.drawImage(img, 0, 0, drawLayer.width, drawLayer.height);
+            hasDrawing = true;
+            updateLaunch();
+            resolve();
+          };
+          img.onerror = resolve;
+          img.src = dataUrl;
+        });
+      }
+
+      // Retour depuis Stripe Checkout
+      (async function handleCheckoutReturn() {
+        const params = new URLSearchParams(location.search);
+        const result = params.get('checkout');
+        if (!result) return;
+        const cleanUrl = location.origin + location.pathname;
+        const pending = JSON.parse(localStorage.getItem('wavemap_pending_ad') || 'null');
+        const isVideo = pending && pending.kind === 'video';
+
+        // Restaure le contenu en attente dans la modale (pour annulation / échec)
+        async function restorePending() {
+          if (!pending) return;
+          if (isVideo) {
+            try { const blob = await idbVideo('get'); if (blob) enterVideoMode(blob); } catch (e) {}
+          } else if (pending.image) {
+            await restoreDrawing(pending.image);
+          }
+        }
+
+        if (result === 'cancel') {
+          history.replaceState(null, '', cleanUrl);
+          open();
+          await restorePending();
+          setStatus(t('payCancelled'), 'info');
+          return;
+        }
+        if (result === 'success') {
+          const sessionId = params.get('session_id');
+          history.replaceState(null, '', cleanUrl);
+          try {
+            const res = await fetch('/api/verify-session?session_id=' + encodeURIComponent(sessionId));
+            const data = await res.json();
+            if (data.paid) {
+              // La pub est désormais gérée côté serveur et diffusée à TOUS via le polling.
+              localStorage.removeItem('wavemap_pending_ad');
+              try { await idbVideo('del'); } catch (e) {}
+              const pos = data.queuePosition || 0;
+              let msg;
+              if (pos === 0)      msg = t('payOnAir');
+              else if (pos > 10)  msg = t('payQueued', { pos });
+              else                msg = t('paySoon');
+              showToast(msg);
+            } else {
+              open();
+              await restorePending();
+              setStatus(t('payFailed'), 'error');
+            }
+          } catch (e) {
+            console.error('[checkout-return]', e);
+            open();
+            await restorePending();
+            setStatus(t('payError'), 'error');
+          }
+        }
+      })();
+    })();
+
+    /* ============== GRILLE DE POINTS (fond) ============== */
+    const dotsCanvas = document.getElementById('dots');
+    const dctx = dotsCanvas.getContext('2d');
+    let dotsDpr = 1;
+    function sizeDots() {
+      dotsDpr = Math.min(window.devicePixelRatio || 1, 2);
+      dotsCanvas.width = Math.round(innerWidth * dotsDpr);
+      dotsCanvas.height = Math.round(innerHeight * dotsDpr);
+      dotsCanvas.style.width = innerWidth + 'px';
+      dotsCanvas.style.height = innerHeight + 'px';
+    }
+    sizeDots();
+    window.addEventListener('resize', sizeDots);
+
+    const DOTS_SPEED = 1.1;     // degrés/seconde
+    const DOT_SPACING = 34;     // espacement de la grille (px)
+    const DOT_RADIUS = 1.5;     // rayon des points (px)
+    const DOT_CURVE = 9e-7;     // courbure (effet bombé, centré)
+    let dotsAngle = 0;
+    let dotsLast = performance.now();
+
+    // Constellations (visibles uniquement la nuit / mode sombre)
+    const strokes = [];          // plusieurs constellations ; chacune = tableau de points [i, j]
+    const CONNECT_DIST = 5;      // distance max (cases de grille) pour relier au point précédent
+
+    // Position écran d'un point de grille (i, j) avec la courbure + rotation courantes
+    function dotPos(i, j, ca, sa, cx, cy) {
+      let x = i * DOT_SPACING, y = j * DOT_SPACING;
+      const f = 1 + DOT_CURVE * (x * x + y * y);
+      x *= f; y *= f;
+      return [cx + x * ca - y * sa, cy + x * sa + y * ca];
+    }
+
+    function drawDots(now) {
+      const dt = (now - dotsLast) / 1000; dotsLast = now;
+      dotsAngle += DOTS_SPEED * dt * Math.PI / 180;
+      const W = innerWidth, H = innerHeight;
+      dctx.setTransform(dotsDpr, 0, 0, dotsDpr, 0, 0);
+      dctx.clearRect(0, 0, W, H);
+      const cx = W / 2, cy = H / 2;             // centre de l'écran -> bombé centré et symétrique
+      const reach = Math.hypot(W, H) * 0.85;
+      const n = Math.ceil(reach / DOT_SPACING);
+      const ca = Math.cos(dotsAngle), sa = Math.sin(dotsAngle);
+      const isDark = document.body.classList.contains('dark');
+      dctx.fillStyle = isDark ? 'rgba(255,255,255,0.22)' : 'rgba(20,20,45,0.15)';
+      for (let i = -n; i <= n; i++) {
+        for (let j = -n; j <= n; j++) {
+          let x = i * DOT_SPACING, y = j * DOT_SPACING;
+          const f = 1 + DOT_CURVE * (x * x + y * y);  // bombé arrondi (barrel)
+          x *= f; y *= f;
+          const px = cx + x * ca - y * sa;
+          const py = cy + x * sa + y * ca;
+          if (px < -4 || px > W + 4 || py < -4 || py > H + 4) continue;
+          dctx.beginPath();
+          dctx.arc(px, py, DOT_RADIUS, 0, 6.2832);
+          dctx.fill();
+        }
+      }
+
+      // Constellations : dessinées seulement la nuit (rien en mode clair)
+      if (isDark && strokes.length) {
+        const t = now * 0.003;
+        const drawPath = (st) => {
+          dctx.beginPath();
+          st.forEach((d, k) => {
+            const p = dotPos(d[0], d[1], ca, sa, cx, cy);
+            k ? dctx.lineTo(p[0], p[1]) : dctx.moveTo(p[0], p[1]);
+          });
+          dctx.stroke();
+        };
+
+        // --- Liens lumineux : halo bleuté flou + trait fin net ---
+        dctx.save();
+        dctx.lineCap = 'round';
+        dctx.lineJoin = 'round';
+        dctx.shadowColor = 'rgba(150,200,255,0.9)';
+        dctx.shadowBlur = 9;
+        dctx.strokeStyle = 'rgba(190,220,255,0.45)';
+        dctx.lineWidth = 1.6;
+        for (const st of strokes) if (st.length > 1) drawPath(st);
+        dctx.shadowBlur = 0;
+        dctx.strokeStyle = 'rgba(255,255,255,0.55)';
+        dctx.lineWidth = 0.7;
+        for (const st of strokes) if (st.length > 1) drawPath(st);
+        dctx.restore();
+
+        // --- Étoiles scintillantes (halo + pulsation) ---
+        dctx.save();
+        for (const st of strokes) for (const d of st) {
+          const p = dotPos(d[0], d[1], ca, sa, cx, cy);
+          const tw = 0.5 + 0.5 * Math.sin(t + d[0] * 12.9898 + d[1] * 78.233); // 0..1
+          dctx.shadowColor = 'rgba(180,215,255,0.95)';
+          dctx.shadowBlur = 6 + 7 * tw;
+          dctx.fillStyle = 'rgba(255,255,255,' + (0.85 + 0.15 * tw) + ')';
+          dctx.beginPath();
+          dctx.arc(p[0], p[1], 2.1 + 1.1 * tw, 0, 6.2832);
+          dctx.fill();
+        }
+        dctx.restore();
+      }
+
+      requestAnimationFrame(drawDots);
+    }
+    requestAnimationFrame(drawDots);
+
+    // Trouve le point de grille le plus proche d'un clic (dans un seuil)
+    function findDotAt(clickX, clickY) {
+      const W = innerWidth, H = innerHeight, cx = W / 2, cy = H / 2;
+      const ca = Math.cos(dotsAngle), sa = Math.sin(dotsAngle);
+      const reach = Math.hypot(W, H) * 0.85;
+      const n = Math.ceil(reach / DOT_SPACING);
+      let best = null, bestD = 20 * 20;   // seuil 20px
+      for (let i = -n; i <= n; i++) {
+        for (let j = -n; j <= n; j++) {
+          const [px, py] = dotPos(i, j, ca, sa, cx, cy);
+          if (px < -4 || px > W + 4 || py < -4 || py > H + 4) continue;
+          const dx = px - clickX, dy = py - clickY, d = dx * dx + dy * dy;
+          if (d < bestD) { bestD = d; best = [i, j]; }
+        }
+      }
+      return best;
+    }
+
+    // Un point écran est "dans l'espace" si l'aller-retour projection le déplace
+    // (hors du globe, unproject le ramène sur le limbe -> erreur non nulle)
+    function isSpace(x, y) {
+      const ll = map.unproject([x, y]);
+      const p = map.project(ll);
+      return Math.hypot(p.x - x, p.y - y) > 6;
+    }
+
+    function addOrToggleDot(i, j) {
+      // déjà sélectionnée ? -> on la retire
+      for (let s = 0; s < strokes.length; s++) {
+        const k = strokes[s].findIndex(p => p[0] === i && p[1] === j);
+        if (k >= 0) {
+          strokes[s].splice(k, 1);
+          if (!strokes[s].length) strokes.splice(s, 1);
+          return;
+        }
+      }
+      // sinon : reliée au dernier point si proche, sinon NOUVELLE constellation
+      const cur = strokes[strokes.length - 1];
+      if (cur && cur.length) {
+        const last = cur[cur.length - 1];
+        if (Math.hypot(i - last[0], j - last[1]) <= CONNECT_DIST) { cur.push([i, j]); return; }
+      }
+      strokes.push([[i, j]]);
+    }
+
+    // Clic dans l'espace (la nuit) -> ajoute/relie un point ; re-clic -> le retire
+    map.on('click', (e) => {
+      if (!dark) return;                                  // visible seulement la nuit
+      if (!isSpace(e.point.x, e.point.y)) return;         // clic sur le globe -> on ignore
+      const d = findDotAt(e.point.x, e.point.y);
+      if (d) addOrToggleDot(d[0], d[1]);
+    });
+
+    /* ================= PULSE (onde autour du pays) ================= */
+    let pulseActive = false;
+    function showPulse(lngLat) {
+      if (!lngLat || !map.getSource('pulse')) { hidePulse(); return; }
+      map.getSource('pulse').setData({
+        type: 'FeatureCollection',
+        features: [{ type: 'Feature', geometry: { type: 'Point', coordinates: [lngLat.lng, lngLat.lat] }, properties: {} }]
+      });
+      pulseActive = true;
+    }
+    function hidePulse() {
+      pulseActive = false;
+      if (map.getSource('pulse')) map.getSource('pulse').setData({ type: 'FeatureCollection', features: [] });
+    }
+    function pulseRing(id, t) {            // t: 0..1
+      if (!map.getLayer(id)) return;
+      const env = Math.sin(t * Math.PI);  // fondu : 0 au départ, max au milieu, 0 à la fin
+      map.setPaintProperty(id, 'circle-radius', 6 + t * 46);
+      map.setPaintProperty(id, 'circle-stroke-opacity', 0.7 * env);
+      map.setPaintProperty(id, 'circle-opacity', 0.12 * env);
+    }
+    const PULSE_PERIOD = 2200;
+    function pulseFrame(now) {
+      if (pulseActive) {
+        pulseRing('pulse-1', (now % PULSE_PERIOD) / PULSE_PERIOD);
+        pulseRing('pulse-2', ((now + PULSE_PERIOD / 2) % PULSE_PERIOD) / PULSE_PERIOD);
+      }
+      requestAnimationFrame(pulseFrame);
+    }
+    requestAnimationFrame(pulseFrame);
+
+    /* ================= RADIO ================= */
+    const RB_MIRRORS = [
+      'https://de1.api.radio-browser.info',
+      'https://de2.api.radio-browser.info',
+      'https://nl1.api.radio-browser.info',
+      'https://at1.api.radio-browser.info',
+      'https://fi1.api.radio-browser.info'
+    ];
+
+    const audio = document.getElementById('audio');
+    let hls = null;
+    let stations = [];      // candidats filtrés (du plus écouté au moins)
+    let idx = 0;
+    let errStreak = 0;
+    let currentCountry = '';
+    let currentCountryName = '';
+    let currentLngLat = null;
+    let currentStation = null;
+    let favorites = [];
+
+    // UI refs
+    const els = {
+      player: document.getElementById('player'),
+      country: document.getElementById('plCountry'),
+      name: document.getElementById('plName'),
+      station: document.getElementById('plStation'),
+      status: document.getElementById('plStatus'),
+      fav: document.getElementById('plFav'),
+      play: document.getElementById('plPlay'),
+      playIcon: document.getElementById('plPlayIcon'),
+      prev: document.getElementById('plPrev'),
+      next: document.getElementById('plNext'),
+      count: document.getElementById('plCount'),
+      vol: document.getElementById('plVol'),
+      mute: document.getElementById('plMute'),
+      volIconPath: document.getElementById('plVolIcon'),
+      close: document.getElementById('plClose'),
+      star: document.getElementById('plStar'),
+      diceBtn: document.getElementById('diceBtn'),
+      searchInput: document.getElementById('searchInput'),
+      searchPanel: document.getElementById('searchPanel'),
+      searchList: document.getElementById('searchList'),
+      favToggle: document.getElementById('favToggle'),
+      favPanel: document.getElementById('favPanel'),
+      favList: document.getElementById('favList'),
+      favCount: document.getElementById('favCount')
+    };
+    const ICON_PLAY = 'M8 5v14l11-7z';
+    const ICON_PAUSE = 'M6 5h4v14H6zM14 5h4v14h-4z';
+
+    function setStatus(txt, isErr) {
+      els.status.innerHTML = txt;
+      els.status.classList.toggle('err', !!isErr);
+    }
+
+    async function fetchStations(cc) {
+      const q = `/json/stations/bycountrycodeexact/${cc}?hidebroken=true&order=clickcount&reverse=true&limit=60`;
+      for (const base of RB_MIRRORS) {
+        try {
+          const ctrl = new AbortController();
+          const t = setTimeout(() => ctrl.abort(), 6000);
+          const r = await fetch(base + q, { signal: ctrl.signal });
+          clearTimeout(t);
+          if (r.ok) return await r.json();
+        } catch (e) { /* essaie le miroir suivant */ }
+      }
+      throw new Error('Serveurs radio injoignables');
+    }
+
+    function isHls(s) { return s.hls === 1 || /\.m3u8(\?|$)/i.test(s.url_resolved || ''); }
+
+    function cleanupHls() { if (hls) { try { hls.destroy(); } catch (e) {} hls = null; } }
+
+    function loadAndPlay(station) {
+      cleanupHls();
+      clearBufferTimer();
+      currentStation = station;
+      updateFavButton();
+      const url = station.url_resolved;
+      els.station.textContent = station.name || 'Station';
+      // favicon
+      if (station.favicon) {
+        els.fav.innerHTML = '';
+        const img = new Image();
+        img.style.cssText = 'width:100%;height:100%;border-radius:12px;object-fit:cover';
+        img.onerror = () => { els.fav.innerHTML = '📻'; };
+        img.src = station.favicon;
+        els.fav.appendChild(img);
+      } else {
+        els.fav.innerHTML = '📻';
+      }
+      setStatus('<span class="spinner"></span> ' + t('connecting'));
+
+      if (isHls(station) && window.Hls && Hls.isSupported()) {
+        hls = new Hls({
+          enableWorker: true,
+          startFragPrefetch: true,      // précharge le 1er segment -> démarrage plus rapide
+          liveSyncDurationCount: 2,     // se cale près du direct (moins d'attente initiale)
+          manifestLoadingTimeOut: 8000,
+          fragLoadingTimeOut: 12000
+        });
+        hls.loadSource(url);
+        hls.attachMedia(audio);
+        hls.on(Hls.Events.MANIFEST_PARSED, () => audio.play().catch(() => {}));
+        hls.on(Hls.Events.ERROR, (_e, data) => { if (data.fatal) onStreamError(); });
+      } else {
+        audio.src = url;
+        audio.play().catch(() => {});
+      }
+    }
+
+    function updateCount() {
+      els.count.textContent = stations.length ? `${idx + 1}/${stations.length}` : '';
+    }
+
+    function playIndex() {
+      if (idx >= stations.length) { setStatus(t('noStation'), true); return; }
+      updateCount();
+      loadAndPlay(stations[idx]);
+    }
+
+    function onStreamError() {
+      errStreak++;
+      if (errStreak > 6) { setStatus(t('noStream'), true); return; }
+      idx++;
+      if (idx >= stations.length) idx = 0;
+      if (errStreak <= stations.length) { setStatus('<span class="spinner"></span> ' + t('nextSt')); playIndex(); }
+      else setStatus(t('noStream'), true);
+    }
+
+    function nextStation() {
+      if (!stations.length) return;
+      errStreak = 0;
+      idx = (idx + 1) % stations.length;
+      playIndex();
+    }
+
+    function prevStation() {
+      if (!stations.length) return;
+      errStreak = 0;
+      idx = (idx - 1 + stations.length) % stations.length;
+      playIndex();
+    }
+
+    async function selectCountry(cc, name, lngLat, preferUuid) {
+      currentCountry = cc;
+      currentCountryName = name;
+      currentLngLat = lngLat || null;
+      radioActive = true;
+      errStreak = 0; idx = 0; stations = [];
+      els.name.innerHTML = `${flagEmoji(cc)} ${name}`;
+      els.count.textContent = '';
+      els.station.textContent = '—';
+      els.fav.innerHTML = '📻';
+      setStatus('<span class="spinner"></span> ' + t('searchRadios'));
+      els.player.classList.add('show');
+      map.setFilter('countries-hl', ['==', ['get', 'ISO_A2_EH'], cc]);
+      showPulse(lngLat);
+      // Recentre le pays dans le dôme visible (le centre de la carte est en bas de l'écran)
+      if (lngLat) map.easeTo({ center: lngLat, offset: [0, -window.innerHeight * 0.55], duration: 1100 });
+
+      let list;
+      try { list = await fetchStations(cc); }
+      catch (e) { setStatus(e.message + t('retry'), true); return false; }
+
+      // Si l'utilisateur a cliqué ailleurs entre-temps, on abandonne
+      if (currentCountry !== cc) return false;
+
+      const httpsOnly = location.protocol === 'https:';
+      stations = list
+        .filter(s => s.url_resolved && s.lastcheckok === 1)
+        .filter(s => !httpsOnly || s.url_resolved.startsWith('https'))
+        // les plus écoutées / votées d'abord
+        .sort((a, b) => (b.votes + b.clickcount) - (a.votes + a.clickcount));
+
+      if (!stations.length) { setStatus(t('noRadio'), true); return false; }
+      // Si on rouvre un favori précis, on saute à cette station
+      if (preferUuid) {
+        const pi = stations.findIndex(s => s.stationuuid === preferUuid);
+        if (pi >= 0) idx = pi;
+      }
+      playIndex();
+      return true;
+    }
+
+    function onCountryClick(e) {
+      // En mode globe, un clic dans l'espace "touche" quand même le calque des pays
+      // (la projection le rabat sur le globe) -> on ignore si le clic est hors du globe.
+      if (isSpace(e.point.x, e.point.y)) return;
+      const f = e.features && e.features[0];
+      if (!f) return;
+      const p = f.properties;
+      const cc = p.ISO_A2_EH;
+      const name = p.NAME_EN || p.NAME || p.ADMIN || 'Pays';
+      if (!cc || cc === '-99') {
+        radioActive = true; els.player.classList.add('show');
+        els.name.textContent = name; els.count.textContent = ''; els.station.textContent = '—';
+        setStatus(t('noCC'), true); return;
+      }
+      // Centre du pays (point intérieur) plutôt que l'endroit cliqué
+      const c = countriesData.find(d => d.ISO_A2_EH === cc);
+      const ll = c ? { lng: c.LABEL_X, lat: c.LABEL_Y } : e.lngLat;
+      selectCountry(cc, name, ll);
+    }
+
+    // Pays au hasard : vole dessus et lance sa radio (réessaie si aucune radio)
+    async function randomCountry() {
+      if (!countriesData.length) return;
+      els.diceBtn.classList.remove('rolling');
+      void els.diceBtn.offsetWidth;          // relance l'animation
+      els.diceBtn.classList.add('rolling');
+      setTimeout(() => els.diceBtn.classList.remove('rolling'), 520);
+      const tried = new Set();
+      for (let attempt = 0; attempt < 8 && tried.size < countriesData.length; attempt++) {
+        let p;
+        do { p = countriesData[Math.floor(Math.random() * countriesData.length)]; } while (tried.has(p.ISO_A2_EH));
+        tried.add(p.ISO_A2_EH);
+        const ok = await selectCountry(p.ISO_A2_EH, p.NAME_EN || p.NAME, { lng: p.LABEL_X, lat: p.LABEL_Y });
+        if (ok) return;
+      }
+    }
+
+    // Drapeau emoji depuis le code ISO
+    function flagEmoji(cc) {
+      if (!cc || cc.length !== 2) return '🏳️';
+      return String.fromCodePoint(...[...cc.toUpperCase()].map(c => 0x1F1E6 + c.charCodeAt(0) - 65));
+    }
+
+    /* ---------- contrôles audio ---------- */
+    function updatePlayIcon() { els.playIcon.setAttribute('d', audio.paused ? ICON_PLAY : ICON_PAUSE); }
+    // N'affiche « Mise en mémoire… » que si le buffer dure > 450ms (sinon ça clignote pour rien)
+    let bufferTimer = null;
+    function clearBufferTimer() { if (bufferTimer) { clearTimeout(bufferTimer); bufferTimer = null; } }
+    audio.addEventListener('play', updatePlayIcon);
+    audio.addEventListener('playing', () => { clearBufferTimer(); errStreak = 0; setStatus('<span class="live-txt">' + t('live') + '</span>'); updatePlayIcon(); });
+    audio.addEventListener('pause', updatePlayIcon);
+    audio.addEventListener('ended', updatePlayIcon);
+    audio.addEventListener('waiting', () => {
+      clearBufferTimer();
+      bufferTimer = setTimeout(() => setStatus('<span class="spinner"></span> ' + t('buffering')), 450);
+    });
+    audio.addEventListener('error', () => { if (audio.src) onStreamError(); });
+    audio.volume = parseFloat(els.vol.value);
+
+    els.play.addEventListener('click', () => {
+      if (audio.paused) audio.play().catch(() => {}); else audio.pause();
+    });
+    els.prev.addEventListener('click', prevStation);
+    els.next.addEventListener('click', nextStation);
+    els.diceBtn.addEventListener('click', randomCountry);
+    const ICON_VOL = 'M3 9v6h4l5 5V4L7 9H3zm13.5 3a4.5 4.5 0 00-2.5-4v8a4.5 4.5 0 002.5-4z';
+    const ICON_MUTE = 'M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51A8.8 8.8 0 0021 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06a8.99 8.99 0 003.69-1.81L19.73 21 21 19.73 4.27 3zM12 4L9.91 6.09 12 8.18V4z';
+    let lastVolume = parseFloat(els.vol.value) || 0.8;
+    let wasMuted = false;
+
+    function updateVolFill() { els.vol.style.setProperty('--vol', (parseFloat(els.vol.value) * 100) + '%'); }
+    function updateVolIcon() {
+      const muted = parseFloat(els.vol.value) === 0;
+      els.volIconPath.setAttribute('d', muted ? ICON_MUTE : ICON_VOL);
+      els.mute.title = muted ? 'Rétablir le son' : 'Couper le son';
+      if (muted !== wasMuted) {           // anime seulement au changement d'état
+        els.mute.classList.remove('anim'); void els.mute.offsetWidth; els.mute.classList.add('anim');
+      }
+      wasMuted = muted;
+    }
+    function toggleMute() {
+      if (parseFloat(els.vol.value) > 0) {
+        lastVolume = parseFloat(els.vol.value) || 0.8;
+        els.vol.value = 0;
+      } else {
+        els.vol.value = lastVolume || 0.8;
+      }
+      audio.volume = parseFloat(els.vol.value);
+      updateVolFill(); updateVolIcon();
+    }
+
+    els.vol.addEventListener('input', () => { audio.volume = parseFloat(els.vol.value); updateVolFill(); updateVolIcon(); });
+    els.mute.addEventListener('click', toggleMute);
+    updateVolFill(); updateVolIcon();
+    els.close.addEventListener('click', () => {
+      audio.pause(); cleanupHls(); audio.removeAttribute('src'); audio.load();
+      els.player.classList.remove('show');
+      map.setFilter('countries-hl', ['==', ['get', 'ISO_A2_EH'], '___none___']);
+      hidePulse();
+      radioActive = false; currentCountry = ''; currentStation = null; lastTime = performance.now();
+    });
+
+    /* ================= FAVORIS ================= */
+    function loadFavs() {
+      try { favorites = JSON.parse(localStorage.getItem('wavemap-favs') || '[]'); }
+      catch (e) { favorites = []; }
+    }
+    function saveFavs() { localStorage.setItem('wavemap-favs', JSON.stringify(favorites)); }
+    function isFav(uuid) { return !!uuid && favorites.some(f => f.uuid === uuid); }
+    function updateFavBadge() { els.favCount.textContent = favorites.length || ''; }
+
+    function updateFavButton() {
+      const on = currentStation && isFav(currentStation.stationuuid);
+      els.star.classList.toggle('on', !!on);
+      els.star.title = on ? 'Retirer des favoris' : 'Ajouter aux favoris';
+    }
+
+    function toggleFav() {
+      if (!currentStation) return;
+      const uuid = currentStation.stationuuid;
+      const i = favorites.findIndex(f => f.uuid === uuid);
+      if (i >= 0) favorites.splice(i, 1);
+      else favorites.push({
+        uuid,
+        name: currentStation.name || 'Station',
+        favicon: currentStation.favicon || '',
+        cc: currentCountry,
+        country: currentCountryName,
+        lng: currentLngLat ? currentLngLat.lng : null,
+        lat: currentLngLat ? currentLngLat.lat : null
+      });
+      saveFavs(); updateFavButton(); updateFavBadge();
+      if (els.favPanel.classList.contains('show')) renderFavList();
+    }
+
+    function playFavorite(f) {
+      els.favPanel.classList.remove('show');
+      const ll = (f.lng != null && f.lat != null) ? { lng: f.lng, lat: f.lat } : null;
+      selectCountry(f.cc, f.country || f.cc, ll, f.uuid);
+    }
+
+    function renderFavList() {
+      els.favList.innerHTML = '';
+      if (!favorites.length) {
+        const e = document.createElement('div');
+        e.className = 'fav-empty';
+        e.textContent = t('noFav');
+        els.favList.appendChild(e);
+        return;
+      }
+      favorites.forEach(f => {
+        const row = document.createElement('div'); row.className = 'fav-row';
+        const play = document.createElement('button'); play.className = 'fav-play';
+        const ico = document.createElement('span'); ico.className = 'fav-ico';
+        if (f.favicon) { const im = new Image(); im.src = f.favicon; im.onerror = () => { ico.textContent = '📻'; }; ico.appendChild(im); }
+        else ico.textContent = '📻';
+        const nm = document.createElement('span'); nm.className = 'fav-name';
+        nm.textContent = `${flagEmoji(f.cc)} ${f.name}`;
+        play.appendChild(ico); play.appendChild(nm);
+        play.addEventListener('click', () => playFavorite(f));
+        const del = document.createElement('button'); del.className = 'fav-del'; del.textContent = '✕'; del.title = t('remove');
+        del.addEventListener('click', (ev) => {
+          ev.stopPropagation();
+          const k = favorites.findIndex(x => x.uuid === f.uuid);
+          if (k >= 0) { favorites.splice(k, 1); saveFavs(); renderFavList(); updateFavBadge(); updateFavButton(); }
+        });
+        row.appendChild(play); row.appendChild(del);
+        els.favList.appendChild(row);
+      });
+    }
+
+    els.star.addEventListener('click', toggleFav);
+    els.favToggle.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const show = !els.favPanel.classList.contains('show');
+      els.favPanel.classList.toggle('show', show);
+      if (show) renderFavList();
+    });
+    document.addEventListener('click', (e) => {
+      if (els.favPanel.classList.contains('show') &&
+          !els.favPanel.contains(e.target) && !els.favToggle.contains(e.target)) {
+        els.favPanel.classList.remove('show');
+      }
+    });
+
+    /* ================= RECHERCHE (genre ou nom de radio) ================= */
+    async function rbGet(path) {
+      for (const base of RB_MIRRORS) {
+        try {
+          const ctrl = new AbortController();
+          const t = setTimeout(() => ctrl.abort(), 6000);
+          const r = await fetch(base + path, { signal: ctrl.signal });
+          clearTimeout(t);
+          if (r.ok) return await r.json();
+        } catch (e) { /* miroir suivant */ }
+      }
+      return null;
+    }
+
+    async function searchStations(q) {
+      const enc = encodeURIComponent(q.trim());
+      // recherche par nom ET par genre (tag) en parallèle, puis fusion
+      const [byName, byTag] = await Promise.all([
+        rbGet(`/json/stations/search?name=${enc}&hidebroken=true&order=clickcount&reverse=true&limit=25`),
+        rbGet(`/json/stations/search?tag=${enc}&hidebroken=true&order=clickcount&reverse=true&limit=25`)
+      ]);
+      const httpsOnly = location.protocol === 'https:';
+      const seen = new Set(), out = [];
+      for (const s of [...(byName || []), ...(byTag || [])]) {
+        if (!s.url_resolved || s.lastcheckok !== 1) continue;
+        if (httpsOnly && !s.url_resolved.startsWith('https')) continue;
+        if (seen.has(s.stationuuid)) continue;
+        seen.add(s.stationuuid); out.push(s);
+      }
+      out.sort((a, b) => (b.votes + b.clickcount) - (a.votes + a.clickcount));
+      return out.slice(0, 12);
+    }
+
+    function closeSearch() { els.searchPanel.classList.remove('show'); }
+
+    // Joue une station précise (résultat de recherche) avec son contexte pays
+    function playStationDirect(station) {
+      closeSearch();
+      els.searchInput.blur();
+      const cc = (station.countrycode || '').toUpperCase();
+      const name = station.country || cc || 'Radio';
+      currentCountry = cc;
+      currentCountryName = name;
+      let ll = null;
+      if (station.geo_lat && station.geo_long) ll = { lng: station.geo_long, lat: station.geo_lat };
+      else { const c = countriesData.find(p => p.ISO_A2_EH === cc); if (c) ll = { lng: c.LABEL_X, lat: c.LABEL_Y }; }
+      currentLngLat = ll;
+      radioActive = true;
+      errStreak = 0; stations = [station]; idx = 0;
+      els.name.innerHTML = `${flagEmoji(cc)} ${name}`;
+      els.player.classList.add('show');
+      if (cc) map.setFilter('countries-hl', ['==', ['get', 'ISO_A2_EH'], cc]);
+      showPulse(ll);
+      if (ll) map.easeTo({ center: ll, offset: [0, -window.innerHeight * 0.55], duration: 1100 });
+      updateCount();
+      loadAndPlay(station);
+    }
+
+    function renderSearchResults(list) {
+      els.searchList.innerHTML = '';
+      if (!list.length) {
+        const e = document.createElement('div'); e.className = 'search-empty';
+        e.textContent = t('noResult');
+        els.searchList.appendChild(e); return;
+      }
+      list.forEach(s => {
+        const row = document.createElement('button'); row.className = 'search-row';
+        const ico = document.createElement('span'); ico.className = 'search-ico';
+        if (s.favicon) { const im = new Image(); im.src = s.favicon; im.onerror = () => { ico.textContent = '📻'; }; ico.appendChild(im); }
+        else ico.textContent = '📻';
+        const meta = document.createElement('span'); meta.className = 'search-meta';
+        const nm = document.createElement('span'); nm.className = 'search-name'; nm.textContent = s.name || 'Station';
+        const sub = document.createElement('span'); sub.className = 'search-sub';
+        const tags = (s.tags || '').split(',').filter(Boolean).slice(0, 2).join(', ');
+        sub.textContent = `${flagEmoji(s.countrycode)} ${s.country || ''}${tags ? ' · ' + tags : ''}`;
+        meta.appendChild(nm); meta.appendChild(sub);
+        row.appendChild(ico); row.appendChild(meta);
+        row.addEventListener('click', () => playStationDirect(s));
+        els.searchList.appendChild(row);
+      });
+    }
+
+    let searchTimer = null, searchSeq = 0, lastResults = [];
+    els.searchInput.addEventListener('input', () => {
+      const q = els.searchInput.value.trim();
+      clearTimeout(searchTimer);
+      if (!q) { closeSearch(); lastResults = []; return; }
+      els.searchPanel.classList.add('show');
+      els.searchList.innerHTML = '<div class="search-loading"><span class="spinner"></span> ' + t('searching') + '</div>';
+      searchTimer = setTimeout(async () => {
+        const seq = ++searchSeq;
+        const res = await searchStations(q);
+        if (seq !== searchSeq) return;     // résultat obsolète
+        lastResults = res;
+        renderSearchResults(res);
+      }, 320);
+    });
+    els.searchInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && lastResults.length) playStationDirect(lastResults[0]);
+      else if (e.key === 'Escape') { closeSearch(); els.searchInput.blur(); }
+    });
+    els.searchInput.addEventListener('focus', () => {
+      if (els.searchInput.value.trim() && els.searchList.children.length) els.searchPanel.classList.add('show');
+    });
+    document.addEventListener('click', (e) => {
+      if (els.searchPanel.classList.contains('show') &&
+          !els.searchPanel.contains(e.target) && e.target !== els.searchInput) {
+        closeSearch();
+      }
+    });
+
+    loadFavs();
+    updateFavBadge();
+    updateFavButton();
+  </script>
+</body>
+</html>
