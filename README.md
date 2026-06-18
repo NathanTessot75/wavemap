@@ -13,8 +13,8 @@ Wavemap est un globe interactif qui vous connecte aux stations de radio du monde
 </p>
 
 <p align="center">
-  <img src="screenshots/mobile.png" alt="Wavemap — vue mobile" height="500" />
   <img src="screenshots/ad.png" alt="Wavemap — création de pub" height="500" />
+  <img src="screenshots/mobile.png" alt="Wavemap — vue mobile" height="500" />
 </p>
 
 ---
