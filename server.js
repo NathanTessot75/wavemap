@@ -34,8 +34,9 @@ const paidSessions = new Map();
    passes × CROSS_SECONDS, puis laisse la place à la suivante dans la file. */
 const CROSS_SECONDS = 35;        // doit correspondre au client
 const MAX_ONAIR = 3;             // dirigeables simultanés
-const UPLOAD_DIR = path.join(__dirname, 'uploads');
-const ADS_FILE = path.join(__dirname, 'ads.json');
+const DATA_DIR = process.env.DATA_DIR || __dirname;
+const UPLOAD_DIR = path.join(DATA_DIR, 'uploads');
+const ADS_FILE = path.join(DATA_DIR, 'ads.json');
 fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 
 // ad : { id, sessionId, type:'image'|'video', mediaUrl, file, passes, createdAt, airStartedAt }
