@@ -492,9 +492,24 @@
     }
     @media (max-width: 560px) {
       .logo { display: none; }
-      .ad-layout { grid-template-columns: 1fr; gap: 18px; }
-      .ad-sheet { height: 88vh; padding: 18px 22px 28px; }
-      .ad-sheet-inner { overflow-y: auto; max-height: calc(88vh - 110px); padding-bottom: 24px; }
+      .ad-sheet { height: 92vh; padding: 14px 14px 22px; }
+      .ad-sheet-inner { overflow-y: auto; max-height: calc(92vh - 90px); padding-bottom: 24px; }
+      .ad-title { font-size: 26px; margin: 4px 0 18px; }
+      .ad-layout { grid-template-columns: 1fr; gap: 14px; }
+      .ad-layout .ad-offers { flex-direction: row; gap: 10px; }
+      .ad-layout .ad-offer { padding: 14px 16px; border-radius: 16px; }
+      .ad-layout .ad-offer-name { font-size: 15px; }
+      .ad-layout .ad-offer-price { font-size: 24px; margin: 6px 0 4px; }
+      .ad-layout .ad-offer-desc { font-size: 12px; }
+      .ad-canvas-col { padding: 12px; border-radius: 16px; }
+      .ad-canvas-col .ad-tools { flex-wrap: wrap; }
+      .ad-tool { padding: 7px 8px; min-width: 34px; border-radius: 8px; font-size: 16px; }
+      .ad-tool svg { width: 16px; height: 16px; }
+      .ad-size-wrap { gap: 6px; }
+      .ad-size { width: 80px; }
+      .ad-launch { padding: 14px; font-size: 15px; border-radius: 14px; }
+      .ad-note { font-size: 11px; margin: 14px 0 14px; }
+      .ad-hint { font-size: 10.5px; }
     }
 
     .blimp-prop { transform-box: fill-box; transform-origin: center; animation: propSpin .5s linear infinite; }
