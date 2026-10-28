@@ -1,4 +1,4 @@
-# Wavemap 🌍📻
+# Wavemap
 
 **Cliquez sur un pays, écoutez sa radio en direct.**
 
