@@ -1,13 +1,19 @@
 {
-  "name": "glob",
+  "name": "wavemap",
   "version": "1.0.0",
-  "description": "",
+  "description": "Interactive world map to stream live radio from every country, with paid sky ads.",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
   },
-  "keywords": [],
-  "author": "",
+  "keywords": [
+    "radio",
+    "maplibre",
+    "map",
+    "stripe",
+    "express"
+  ],
+  "author": "Nathan Tessot",
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
@@ -18,5 +24,10 @@
     "openai": "^6.42.0",
     "opentype.js": "^2.0.0",
     "stripe": "^22.2.1"
+  },
+  "homepage": "https://wavemap.net",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/NathanTessot75/wavemap.git"
   }
 }

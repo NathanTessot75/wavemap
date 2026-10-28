@@ -1,24 +1,23 @@
-# Wavemap — Paiement & modération
+# Wavemap: payments and moderation setup
 
-Le site est maintenant servi par un petit serveur Node (`server.js`) qui gère aussi
-le paiement Stripe et la vérification automatique des visuels (OpenAI).
+The site is served by a small Node server (`server.js`) that also handles Stripe payments and automatic moderation of user visuals (OpenAI).
 
-## 1. Récupérer les clés (mode test, gratuit)
+## 1. Get the keys (test mode, free)
 
-### Stripe (clé secrète de test)
-1. Crée un compte sur https://stripe.com (gratuit).
-2. Reste en **Mode test** (interrupteur en haut à droite du tableau de bord).
-3. Va dans **Développeurs → Clés API**.
-4. Copie la **clé secrète** qui commence par `sk_test_...`.
+### Stripe (secret test key)
+1. Create an account on https://stripe.com.
+2. Stay in **Test mode** (toggle at the top right of the dashboard).
+3. Go to **Developers → API keys**.
+4. Copy the **secret key**, which starts with `sk_test_...`.
 
-### OpenAI (modération)
-1. Va sur https://platform.openai.com/api-keys
-2. Crée une clé, copie-la (commence par `sk-...`).
-3. La modération utilise le modèle gratuit `omni-moderation-latest`.
+### OpenAI (moderation)
+1. Go to https://platform.openai.com/api-keys.
+2. Create a key and copy it (it starts with `sk-...`).
+3. Moderation uses the free `omni-moderation-latest` model.
 
-## 2. Renseigner le fichier `.env`
+## 2. Fill in the `.env` file
 
-Ouvre `.env` à la racine et colle tes clés :
+Copy `.env.example` to `.env` at the project root and paste your keys:
 
 ```
 STRIPE_SECRET_KEY=sk_test_xxxxxxxxxxxxx
@@ -27,81 +26,74 @@ PORT=5173
 BASE_URL=http://localhost:5173
 ```
 
-> Le `.env` n'est jamais envoyé au navigateur ni commité (voir `.gitignore`).
+> `.env` is never sent to the browser nor committed (see `.gitignore`).
 
-## 3. Lancer
+## 3. Run
 
 ```
 npm start
 ```
 
-Puis ouvre http://localhost:5173
+Then open http://localhost:5173.
 
-## 4. Tester un paiement (carte de test Stripe)
+## 4. Test a payment (Stripe test card)
 
-Dans la page de paiement Stripe, utilise :
-- Numéro : **4242 4242 4242 4242**
-- Date : n'importe quelle date future · CVC : n'importe quel 3 chiffres · Code postal : n'importe lequel
+On the Stripe payment page, use:
+- Number: **4242 4242 4242 4242**
+- Any future date, any 3-digit CVC, any postal code
 
-Aucune somme réelle n'est débitée en mode test.
+No real money is charged in test mode.
 
-## Flux complet
-1. L'utilisateur dessine / importe un visuel → clique « Paré au décollage ».
-2. Le visuel est envoyé à `/api/moderate` (OpenAI). S'il est inapproprié → refusé.
-3. Sinon → création d'une session Stripe Checkout → redirection vers la page de paiement.
-4. Au retour (`?checkout=success`), le serveur vérifie le paiement (`/api/verify-session`)
-   puis le visuel s'affiche sur le dirigeable.
+## Full flow
 
-## Offres (définies côté serveur, dans `server.js`)
-| id     | nom                   | prix   | passages |
-|--------|-----------------------|--------|----------|
-| single | Vol express           | 0,99 € | 1        |
-| pro    | Voyage long-courrier  | 4,99 € | 6        |
+1. The user draws or uploads a visual and clicks the take-off button.
+2. The visual is sent to `/api/moderate` (OpenAI). If it is inappropriate, it is rejected.
+3. Otherwise a Stripe Checkout session is created and the user is redirected to the payment page.
+4. On return (`?checkout=success`), the server verifies the payment (`/api/verify-session`) and the visual appears on the blimp.
 
-Le montant est **toujours** décidé par le serveur — le navigateur n'envoie qu'un identifiant d'offre.
+## Offers (defined server-side, in `server.js`)
 
-## Webhook Stripe (fiabilité)
+| id     | name                  | price  | passes |
+|--------|-----------------------|--------|--------|
+| single | Express flight        | €0.99  | 1      |
+| pro    | Long-haul journey     | €4.99  | 6      |
 
-Le site fonctionne **sans** webhook : au retour de Stripe, le serveur interroge directement
-l'API Stripe (`/api/verify-session`) pour confirmer le paiement. Le webhook ajoute une
-confirmation **côté serveur, instantanée et indépendante du navigateur**.
+The amount is **always** decided by the server: the browser only sends an offer id.
 
-### Tester le webhook en local (Stripe CLI)
-1. Installe la CLI Stripe : https://stripe.com/docs/stripe-cli (sur Mac : `brew install stripe/stripe-cli/stripe`).
-2. Connecte-la : `stripe login`
-3. Lance l'écoute (laisse ce terminal ouvert) :
+## Stripe webhook (reliability)
+
+The site works **without** a webhook: on return from Stripe, the server queries the Stripe API directly (`/api/verify-session`) to confirm the payment. The webhook adds a confirmation that is **server-side, instant and independent of the browser**.
+
+### Test the webhook locally (Stripe CLI)
+1. Install the Stripe CLI: https://stripe.com/docs/stripe-cli (on macOS: `brew install stripe/stripe-cli/stripe`).
+2. Log in: `stripe login`
+3. Start listening (keep this terminal open):
    ```
    stripe listen --forward-to localhost:5173/api/webhook
    ```
-4. La CLI affiche un secret `whsec_...`. Colle-le dans `.env` :
+4. The CLI prints a `whsec_...` secret. Paste it into `.env`:
    ```
    STRIPE_WEBHOOK_SECRET=whsec_xxxxxxxx
    ```
-5. Relance le serveur (`npm start`). Désormais, chaque paiement de test déclenche
-   l'événement `checkout.session.completed`, visible dans le terminal de la CLI **et**
-   dans les logs du serveur (`[webhook] paiement confirmé : …`).
+5. Restart the server (`npm start`). Each test payment now triggers the `checkout.session.completed` event, visible in the CLI terminal **and** in the server logs.
 
-> Sans `STRIPE_WEBHOOK_SECRET`, le endpoint `/api/webhook` reste actif mais sans
-> vérification de signature — à NE PAS laisser ainsi en production.
+> Without `STRIPE_WEBHOOK_SECRET`, the `/api/webhook` endpoint stays active but without signature verification. Do NOT leave it like that in production.
 
-## Système de pubs partagé (file d'attente + diffusion)
+## Shared ads (queue and broadcast)
 
-Les pubs payées sont **partagées** : tous les visiteurs voient les mêmes dirigeables.
+Paid ads are **shared**: every visitor sees the same blimps.
 
-**Comment ça marche :**
-1. À la création, le média (image/vidéo) est **uploadé sur le serveur** (`POST /api/upload` → dossier `uploads/`).
-2. Au paiement validé (webhook ou `verify-session`), la pub rejoint la **file** (`ads.json`).
-3. Le serveur met jusqu'à **3 pubs à l'antenne** simultanément ; chacune vole pendant
-   `passes × 35 s`, puis laisse la place à la suivante dans la file.
-4. Tous les globes interrogent `GET /api/onair` toutes les ~4 s et affichent les pubs en cours.
+1. On creation, the media (image or video) is **uploaded to the server** (`POST /api/upload` → `uploads/` folder).
+2. Once the payment is confirmed (webhook or `verify-session`), the ad joins the **queue** (`ads.json`).
+3. The server keeps up to **3 ads on air** at the same time; each flies for `passes × 35 s`, then makes room for the next one.
+4. Every globe polls `GET /api/onair` about every 4 s and displays the ads currently on air.
 
-**Fichiers générés (ignorés par git) :** `uploads/` (médias) et `ads.json` (file). Les supprimer remet la file à zéro.
+**Generated files (ignored by git):** `uploads/` (media) and `ads.json` (queue). Deleting them resets the queue.
 
-**Réglages** (dans `server.js`) : `MAX_ONAIR` (dirigeables simultanés) et `CROSS_SECONDS` (durée d'un passage, doit matcher le client dans `index.html`).
+**Settings** (in `server.js`): `MAX_ONAIR` (simultaneous blimps) and `CROSS_SECONDS` (duration of one pass, must match the client in `index.html`).
 
-## Pour la production (plus tard)
-- Passer les clés en mode **live** (`sk_live_...`) et héberger le serveur (Render, Railway, Fly.io…).
-- Configurer le webhook dans **Stripe → Développeurs → Webhooks** (URL publique de ton serveur).
-- Remplacer `ads.json` + `uploads/` par une **base de données** + un stockage objet (S3…) pour passer à l'échelle.
-- Nettoyer les médias **orphelins** (uploads de paiements annulés) via une tâche périodique.
-- Éventuellement passer le polling en **WebSocket** pour du vrai temps réel.
+## Production
+
+- Switch to **live** keys (`sk_live_...`) and host the server (Railway, Render, Fly.io…).
+- Configure the webhook in **Stripe → Developers → Webhooks** with your server's public URL.
+- To scale: replace `ads.json` + `uploads/` with a **database** and object storage (S3…), clean up **orphan** media from cancelled payments with a periodic job, and consider **WebSockets** instead of polling.

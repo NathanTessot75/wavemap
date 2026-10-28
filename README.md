@@ -1,63 +1,64 @@
 # Wavemap
 
-**Cliquez sur un pays, écoutez sa radio en direct.**
+**Click a country, listen to its radio live.**
 
-Wavemap est un globe interactif qui vous connecte aux stations de radio du monde entier. Explorez la carte, découvrez de nouvelles sonorités, et envoyez votre message publicitaire à travers le ciel — visible par tous les visiteurs.
+Wavemap is an interactive globe that connects you to radio stations around the world. Explore the map, discover new sounds, and send your own message flying across the sky on a blimp, visible to every visitor.
 
 🔗 **[wavemap.net](https://wavemap.net)**
 
 ---
 
 <p align="center">
-  <img src="screenshots/desktop.png" alt="Wavemap — vue desktop" width="720" />
+  <img src="screenshots/desktop.png" alt="Wavemap on desktop" width="720" />
 </p>
 
 <p align="center">
-  <img src="screenshots/ad.png" alt="Wavemap — création de pub" height="500" />
-  <img src="screenshots/mobile.png" alt="Wavemap — vue mobile" height="500" />
+  <img src="screenshots/ad.png" alt="Creating a sky ad" height="500" />
+  <img src="screenshots/mobile.png" alt="Wavemap on mobile" height="500" />
 </p>
 
 ---
 
-## Fonctionnalités
+## Features
 
-- **Radio en direct** — Cliquez sur n'importe quel pays pour écouter une station locale en streaming
-- **Globe 3D** — Navigation fluide sur un globe MapLibre avec projection sphérique
-- **Recherche** — Trouvez un pays ou un genre musical instantanément
-- **Pub dirigeable** — Créez votre message (dessin, image ou vidéo) et faites-le voler sur le globe, visible par tous les visiteurs en temps réel
-- **Multilingue** — Interface disponible en 11 langues, détection automatique
-- **Responsive** — Adapté desktop et mobile
+- **Live radio**: click any country to stream a local station
+- **3D globe**: smooth navigation on a MapLibre globe with spherical projection
+- **Search**: find a country or a music genre instantly
+- **Sky ads**: draw a message or upload an image or video, and fly it across the globe on a blimp, visible to all visitors in real time
+- **Moderation**: every visual is checked automatically before it goes live
+- **Payments**: Stripe Checkout, with prices set server-side and every payment verified by the server
+- **Multilingual**: interface in 11 languages, detected automatically
+- **Responsive**: works on desktop and mobile
 
-## Stack technique
+## Tech stack
 
 | Frontend | Backend | Services |
 |----------|---------|----------|
 | MapLibre GL | Node.js / Express | Stripe Checkout |
-| HLS.js | multer | OpenAI Moderation |
-| iro.js (color picker) | Volume persistant | Railway |
-| Vanilla JS | — | Namecheap DNS |
+| HLS.js | Multer (uploads) | OpenAI Moderation |
+| iro.js (color picker) | Persistent volume | Railway (hosting) |
+| Vanilla JavaScript | | |
 
-## Démarrage local
+## Run locally
 
 ```bash
 git clone https://github.com/NathanTessot75/wavemap.git
 cd wavemap
 npm install
-```
-
-Créez un fichier `.env` :
-
-```env
-STRIPE_SECRET_KEY=sk_test_...
-OPENAI_API_KEY=sk-...
-STRIPE_WEBHOOK_SECRET=whsec_...
-```
-
-```bash
+cp .env.example .env   # then fill in your keys
 npm start
 # → http://localhost:5173
 ```
 
-## Licence
+Payments and moderation need a Stripe test key and an OpenAI key. See [SETUP.md](SETUP.md) for the full setup, test cards and webhook configuration.
 
-© 2026 Nathan Tessot — Tous droits réservés.
+## How a sky ad works
+
+1. The user draws or uploads a visual and clicks **Ready for take-off**.
+2. The visual is sent to `/api/moderate` (OpenAI moderation); inappropriate content is rejected.
+3. Otherwise a Stripe Checkout session is created and the user pays.
+4. On return, the server verifies the payment (`/api/verify-session`, plus the Stripe webhook) and the visual appears on a blimp for everyone.
+
+## License
+
+© 2026 Nathan Tessot. All rights reserved.
